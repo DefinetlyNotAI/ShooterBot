@@ -16,8 +16,10 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+from io import TextIOWrapper
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "default.yaml"
@@ -25,7 +27,7 @@ CREATED_MODELS: list[Path] = []
 CONFIG_BACKUP: bytes | None = None
 CONFIG_EXISTED = False
 MODELS_DIR_EXISTED = False
-INSTALL_LOG = None
+INSTALL_LOG: TextIOWrapper | None = None
 REQUIRED = [
     ("ultralytics", "ultralytics>=8.1.28"),
     ("cv2", "opencv-python>=4.7.0"),
@@ -35,7 +37,7 @@ REQUIRED = [
     ("serial", "pyserial>=3.5"),
 ]
 TORCH_SPEC = "torch>=2.5.0"
-MODULE_DISTRIBUTIONS = {
+MODULE_DISTRIBUTIONS: dict[str, str] = {
     "ultralytics": "ultralytics",
     "cv2": "opencv-python",
     "yaml": "PyYAML",
@@ -157,12 +159,15 @@ class UI:
         self.verbose = args.verbose
 
     @staticmethod
-    def clear_screen():
+    def clear_screen() -> None:
         """Clear the current terminal without relying on third-party tools."""
         if os.name == "nt":
-            os.system("cls")
+            subprocess.run(
+                ["cmd", "/c", "cls"],
+                check=False,
+            )
         else:
-            print("\033[2J\033[H", end="")
+            print("\033[2J\033[H", end="", flush=True)
 
     def failure(self, title, reason):
         self.out(f"\n  {title}", "red")
@@ -209,7 +214,10 @@ class UI:
                 width, int(width * current_bytes / max(1, total_bytes))
             )
             bar = "#" * filled + "." * (width - filled)
-            text = f"  {label:<28} | [{bar}] | {self.bytes_text(current_bytes):>10} / {self.bytes_text(total_bytes):<10}"
+            text = (
+                f"  {label:<28} | [{bar}] | "
+                f"{self.bytes_text(current_bytes):>10} / {self.bytes_text(total_bytes):<10}"
+            )
         else:
             width = 28
             offset = int(time.monotonic() * 8) % width
@@ -235,13 +243,16 @@ class UI:
         return text[: width - 3].rstrip() + "..."
 
     @staticmethod
-    def bytes_text(value):
+    def bytes_text(value: int | float) -> str:
         units = ("B", "KB", "MB", "GB")
         amount = float(value)
+
         for unit in units:
             if amount < 1024 or unit == units[-1]:
                 return f"{amount:.1f} {unit}"
             amount /= 1024
+
+        raise RuntimeError("Unreachable")
 
     def header(self, text):
         self.out()
@@ -433,9 +444,13 @@ class UI:
         )
 
 
-def available(module):
+def available(module: str) -> bool:
     try:
-        distribution = MODULE_DISTRIBUTIONS.get(module, module)
+        distribution = (
+            MODULE_DISTRIBUTIONS[module]
+            if module in MODULE_DISTRIBUTIONS
+            else module
+        )
         importlib.metadata.version(distribution)
         return True
     except importlib.metadata.PackageNotFoundError:
@@ -502,7 +517,8 @@ def preflight(ui):
     )
     if not active:
         raise Stop(
-            "Refusing to install into system Python. Run: python -m venv .venv, activate it, then rerun python -m src.cli.installer."
+            "Refusing to install into system Python."
+            "\nRun: python -m venv .venv, activate it, then rerun python -m src.cli.installer."
         )
     if shutil.which("pip") is None:
         raise Stop(
@@ -528,7 +544,6 @@ def pip(
 ):
     if not packages:
         return
-    total_packages = len(packages)
     stage = Path(tempfile.mkdtemp(prefix="nirt-install-"))
     process = None
     try:
@@ -679,6 +694,7 @@ def remove_incompatible_packages(ui, distributions):
 def start_hidden_process(command):
     """Run a command silently while exposing output to the installer parser."""
     log_event("$ " + " ".join(str(item) for item in command))
+
     process = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -686,14 +702,20 @@ def start_hidden_process(command):
         stderr=subprocess.STDOUT,
         bufsize=0,
     )
-    messages = queue.Queue()
+
+    if process.stdout is None:
+        raise RuntimeError("Failed to capture subprocess stdout.")
+
+    stdout = cast(BinaryIO, process.stdout)
+    messages: queue.Queue[str | None] = queue.Queue()
 
     def reader():
         try:
             while True:
-                chunk = process.stdout.read(256)
+                chunk = stdout.read(256)
                 if not chunk:
                     break
+
                 decoded = chunk.decode("utf-8", errors="replace")
                 log_event(decoded.rstrip())
                 messages.put(decoded)
@@ -1075,7 +1097,8 @@ def install_gpu(ui, skip=False):
     )
     if not torch_installed():
         raise Stop(
-            f"CUDA PyTorch installation did not replace the incompatible torch installation; found {installed_version('torch') or 'missing'}."
+            f"CUDA PyTorch installation did not replace the incompatible torch installation; "
+            f"found {installed_version('torch') or 'missing'}."
         )
     check = subprocess.run(
         [
@@ -1107,16 +1130,16 @@ def install_optional(ui, skip=False):
     selected = []
     cleanup = []
     selected_keys = []
-    for key, (packages, label) in OPTIONAL.items():
+    for key, (packages, LABEL) in OPTIONAL.items():
         if optional_ready(key):
-            ui.out(f"    {label}: already installed and verified", "green")
+            ui.out(f"    {LABEL}: already installed and verified", "green")
             continue
         if optional_distribution_present(key):
             ui.out(
-                f"    {label}: installed but incompatible; repair may be needed",
+                f"    {LABEL}: installed but incompatible; repair may be needed",
                 "yellow",
             )
-        if ui.yn(f"Install or repair {label}", True):
+        if ui.yn(f"Install or repair {LABEL}", True):
             selected.extend(packages)
             selected_keys.append(key)
             cleanup.extend(
@@ -1159,12 +1182,12 @@ def health_check(ui):
     ui.header("Health Check")
     issues = []
 
-    def check(label, passed, detail, repair=None):
+    def check(LABEL, passed, detail, repair=None):
         if passed:
-            ui.out(f"  [OK] {label}: {detail}", "green")
+            ui.out(f"  [OK] {LABEL}: {detail}", "green")
         else:
-            ui.out(f"  [FAIL] {label}: {detail}", "red")
-            issues.append({"label": label, "detail": detail, "repair": repair})
+            ui.out(f"  [FAIL] {LABEL}: {detail}", "red")
+            issues.append({"label": LABEL, "detail": detail, "repair": repair})
 
     check(
         "Configuration",
@@ -1194,11 +1217,13 @@ def health_check(ui):
     cuda_state = check_torch_cuda() if torch_installed() else "missing"
     requested_device = config_value(r"^\s*device:\s*(\w+)", "auto").lower()
     torch_runtime_ok = torch_installed() and cuda_state != "missing"
+    torch_version = installed_version("torch") or "unknown"
+
     check(
         "PyTorch runtime",
         torch_runtime_ok,
         (
-            f"CUDA available ({installed_version('torch')})"
+            f"CUDA available ({torch_version})"
             if cuda_state == "cuda"
             else (
                 "CPU available"
@@ -1374,37 +1399,68 @@ def repair_health(ui, issues):
     ui.out("  Repair pass complete; repeating Health Check.", "cyan")
 
 
+def download_to_temp(
+        ui,
+        name: str,
+        url: str,
+        directory: Path,
+        label: str,
+) -> tuple[Path, int, int]:
+    """Download a URL to a temporary file and report progress."""
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "NIRT-ShooterRobot-installer"},
+    )
+
+    with urllib.request.urlopen(request, timeout=60) as response:
+        total = int(response.headers.get("Content-Length", "0") or 0)
+
+        with tempfile.NamedTemporaryFile(
+                prefix=f".{name}.",
+                suffix=".part",
+                dir=directory,
+                delete=False,
+        ) as temp:
+            temp_path = Path(temp.name)
+            received = 0
+
+            while True:
+                chunk = response.read(1024 * 1024)
+                if not chunk:
+                    break
+
+                temp.write(chunk)
+                received += len(chunk)
+
+                ui.progress_bytes(
+                    label,
+                    received,
+                    total or None,
+                )
+
+    return temp_path, received, total
+
+
 def download_model_asset(ui, name, url, destination):
     """Download one model atomically for the Health Check repair pass."""
     destination.parent.mkdir(parents=True, exist_ok=True)
     temp_path = None
+
     try:
-        request = urllib.request.Request(
-            url, headers={"User-Agent": "NIRT-ShooterRobot-installer"}
+        temp_path, received, total = download_to_temp(
+            ui,
+            name,
+            url,
+            destination.parent,
+            f"Repairing {name}",
         )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            total = int(response.headers.get("Content-Length", "0") or 0)
-            with tempfile.NamedTemporaryFile(
-                    prefix=f".{name}.",
-                    suffix=".part",
-                    dir=destination.parent,
-                    delete=False,
-            ) as temp:
-                temp_path = Path(temp.name)
-                received = 0
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    temp.write(chunk)
-                    received += len(chunk)
-                    ui.progress_bytes(
-                        f"Repairing {name}", received, total or None
-                    )
+
         if received < 1024 or (total and received != total):
             raise Stop(f"Incomplete model repair for {name}.")
+
         temp_path.replace(destination)
         CREATED_MODELS.append(destination)
+
         ui.progress_bytes(
             f"Repairing {name}",
             received,
@@ -1413,11 +1469,14 @@ def download_model_asset(ui, name, url, destination):
             detail=f"{ui.bytes_text(received)} repaired",
         )
         ui.out(f"  {name}: repaired", "green")
+
     except (urllib.error.URLError, OSError, Stop) as exc:
         if temp_path:
             temp_path.unlink(missing_ok=True)
+
         if isinstance(exc, Stop):
             raise
+
         raise Stop(f"Could not repair {name}: {exc}")
 
 
@@ -1615,28 +1674,13 @@ def install_models(ui):
             continue
         temp_path = None
         try:
-            request = urllib.request.Request(
-                url, headers={"User-Agent": "NIRT-ShooterRobot-installer"}
+            temp_path, received, total = download_to_temp(
+                ui,
+                name,
+                url,
+                model_dir,
+                f"Downloading {name}",
             )
-            with urllib.request.urlopen(request, timeout=60) as response:
-                total = int(response.headers.get("Content-Length", "0") or 0)
-                with tempfile.NamedTemporaryFile(
-                        prefix=f".{name}.",
-                        suffix=".part",
-                        dir=model_dir,
-                        delete=False,
-                ) as temp:
-                    temp_path = Path(temp.name)
-                    received = 0
-                    while True:
-                        chunk = response.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        temp.write(chunk)
-                        received += len(chunk)
-                        ui.progress_bytes(
-                            f"Downloading {name}", received, total or None
-                        )
             if total and received != total:
                 raise Stop(f"Incomplete download for {name}.")
             if temp_path.stat().st_size < 1024:
@@ -2005,8 +2049,9 @@ def advanced_config(ui):
     # Advanced editing is transactional: keep the original bytes untouched
     # while prompts and validation are still in progress.
     CONFIG_EXISTED = True
-    CONFIG_BACKUP = CONFIG.read_bytes()
-    staged_text = CONFIG_BACKUP.decode("utf-8")
+    backup = CONFIG.read_bytes()
+    CONFIG_BACKUP = backup
+    staged_text = backup.decode("utf-8")
     ui.header("Advanced Configuration")
     ui.out(
         "  Press Enter to keep each current value. Advanced changes preserve the existing file structure."
@@ -2052,14 +2097,14 @@ def advanced_config(ui):
             "confidence_threshold",
             r"^\s*confidence_threshold:\s*(.+)$",
             "Normal confidence threshold",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "inference",
             "face_confidence",
             r"^\s*face_confidence:\s*(.+)$",
             "Face confidence threshold",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "inference",
@@ -2080,21 +2125,21 @@ def advanced_config(ui):
             "min_area",
             r"^\s*min_area:\s*(.+)$",
             "Minimum detection area",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "inference",
             "nms_iou_threshold",
             r"^\s*nms_iou_threshold:\s*(.+)$",
             "Detection overlap suppression threshold",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "inference",
             "max_models_to_load",
             r"^\s*max_models_to_load:\s*(.+)$",
             "Maximum loaded models",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         (
             "inference",
@@ -2108,7 +2153,7 @@ def advanced_config(ui):
             "max_detector_time",
             r"^\s*max_detector_time:\s*(.+)$",
             "Maximum detector time in seconds",
-            lambda value: float_value(value, 0.0),
+            lambda lambda_value: float_value(lambda_value, 0.0),
         ),
         (
             "inference",
@@ -2122,28 +2167,28 @@ def advanced_config(ui):
             "max_lost",
             r"^\s*max_lost:\s*(.+)$",
             "Frames before a lost track is removed",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         (
             "tracking",
             "iou_threshold",
             r"^\s*iou_threshold:\s*(.+)$",
             "Track association overlap threshold",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "tracking",
             "min_hits",
             r"^\s*min_hits:\s*(.+)$",
             "Hits required to confirm a track",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         (
             "tracking",
             "max_age",
             r"^\s*max_age:\s*(.+)$",
             "Maximum track age",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         (
             "tracking",
@@ -2171,14 +2216,14 @@ def advanced_config(ui):
             "face_memory_threshold",
             r"^\s*face_memory_threshold:\s*(.+)$",
             "Face appearance match threshold",
-            lambda value: float_value(value, 0.0, 1.0),
+            lambda lambda_value: float_value(lambda_value, 0.0, 1.0),
         ),
         (
             "tracking",
             "face_memory_max_age",
             r"^\s*face_memory_max_age:\s*(.+)$",
             "Face memory lifetime in frames",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         (
             "features",
@@ -2199,7 +2244,7 @@ def advanced_config(ui):
             "font_scale",
             r"^\s*font_scale:\s*(.+)$",
             "Overlay font scale",
-            lambda value: float_value(value, 0.0),
+            lambda lambda_value: float_value(lambda_value, 0.0),
         ),
         (
             "visualization",
@@ -2228,7 +2273,7 @@ def advanced_config(ui):
             "baudrate",
             r"^\s*baudrate:\s*(.+)$",
             "Serial baud rate",
-            lambda value: integer_value(value, 1),
+            lambda lambda_value: integer_value(lambda_value, 1),
         ),
         ("logging", "level", r"^\s*level:\s*(.+)$", "Logging level", None),
         (
