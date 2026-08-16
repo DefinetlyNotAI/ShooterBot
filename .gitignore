@@ -1,0 +1,29 @@
+# Virtual environments and local Python state
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime and installer output
+logs/
+*.log
+.nirt_installer_write_test
+configs/
+
+# Local/generated configuration and caches
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.idea/
+
+# Downloaded model assets (keep model URLs/catalogues documented)
+models/
+src/scripts/models/
+
+# Temporary installer files
+*.part
+*.tmp
