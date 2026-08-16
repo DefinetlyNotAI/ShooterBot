@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional, cast
 
 from .coco import COCO_CLASSES
 from .utils import bbox_center, iou
@@ -243,20 +243,33 @@ class Tracker:
         track.kf_state = [x, y, vx, vy]
         return track.kf_state
 
-    def _update_kf(self, track: Track, meas: Tuple[float, float], dt: float):
+    def _update_kf(
+            self,
+            track: Track,
+            meas: Tuple[float, float],
+            dt: float,
+    ) -> None:
         # naive update: set velocity from difference
         if track.kf_state is None:
             self._init_kf(track)
-        px, py, vx, vy = track.kf_state
+
+        state = track.kf_state
+
+        if state is None:
+            return
+
+        px, py, vx, vy = state
         mx, my = meas
+
         new_vx = (mx - px) / max(1e-3, dt)
         new_vy = (my - py) / max(1e-3, dt)
+
         track.kf_state = [
             mx,
             my,
             0.7 * vx + 0.3 * new_vx,
             0.7 * vy + 0.3 * new_vy,
-        ]
+            ]
 
     def update(
             self,
@@ -298,11 +311,17 @@ class Tracker:
                 except Exception:
                     cost[i, j] = 1.0
 
-        matches = []
+        matches: List[Tuple[int, int]] = []
         if self._hungarian_available and n_tr and n_det:
             from scipy.optimize import linear_sum_assignment
 
-            row_ind, col_ind = linear_sum_assignment(cost)
+            assignment = cast(
+                Tuple[_np.ndarray, _np.ndarray],
+                linear_sum_assignment(cost),
+            )
+
+            row_ind, col_ind = assignment
+
             for r, c in zip(row_ind, col_ind):
                 if (
                         r < n_tr
@@ -312,9 +331,9 @@ class Tracker:
                     matches.append((r, c))
         else:
             # greedy matching by lowest cost
-            used_rows = set()
-            used_cols = set()
-            flat = []
+            used_rows: set[int] = set()
+            used_cols: set[int] = set()
+            flat: List[Tuple[float, int, int]] = []
             for i in range(n_tr):
                 for j in range(n_det):
                     flat.append((cost[i, j], i, j))
@@ -327,8 +346,9 @@ class Tracker:
                     used_rows.add(i)
                     used_cols.add(j)
 
-        matched_tr_ids = set()
-        matched_det_idx = set()
+        matched_tr_ids: set[int] = set()
+        matched_det_idx: set[int] = set()
+
         # Update matched tracks
         for i, j in matches:
             tid, tr = tracks_list[i]
