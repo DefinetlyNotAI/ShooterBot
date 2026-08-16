@@ -8,7 +8,7 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("realtime_cv.setup")
+logger = logging.getLogger("nirt_shooterbot.setup")
 
 REQUIRED_PACKAGES = {
     "torch": "torch>=2.5.0",

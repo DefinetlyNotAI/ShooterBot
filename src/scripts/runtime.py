@@ -70,4 +70,4 @@ def configure_script_output(module_name: str) -> ScriptOutput:
         logger_name = Path(source_file).stem if source_file else "script"
     else:
         logger_name = module_name.removeprefix("src.")
-    return ScriptOutput(logging.getLogger(f"realtime_cv.{logger_name}"))
+    return ScriptOutput(logging.getLogger(f"nirt_shooterbot.{logger_name}"))

@@ -1,4 +1,4 @@
-# Realtime CV Framework
+# NIRT ShooterBot
 
 ---
 

@@ -1,3 +1,3 @@
-"""Realtime CV Framework package."""
+"""NIRT ShooterBot package."""
 
 __version__ = "0.1.0"

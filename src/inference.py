@@ -16,7 +16,7 @@ from .utils import iou
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models"
 
-logger = logging.getLogger("realtime_cv.inference")
+logger = logging.getLogger("nirt_shooterbot.inference")
 
 
 def choose_device(device: str) -> str:
@@ -105,7 +105,7 @@ class YOLODetector:
         self.cache_dir = (
             Path(cache_dir)
             if cache_dir
-            else ROOT / ".cache" / "realtime_cv_models"
+            else ROOT / ".cache" / "nirt_shooterbot_models"
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         # model selection: support 'auto' to pick model based on device

@@ -8,7 +8,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-logger = logging.getLogger("realtime_cv.features")
+logger = logging.getLogger("nirt_shooterbot.features")
 
 
 def face_appearance(

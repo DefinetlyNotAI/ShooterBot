@@ -76,7 +76,7 @@ This project loads YAML into typed dataclasses in `src/config.py`. Unknown keys 
 ## Logging
 
 - `logging.level` - log level such as `INFO` or `DEBUG`.
-- `logging.file` - runtime log file path; defaults to `logs/realtime_cv.log` and is always kept under the project log folder unless an explicit path is supplied.
+- `logging.file` - runtime log file path; defaults to `logs/nirt_shooterbot.log` and is always kept under the project log folder unless an explicit path is supplied.
 - `logging.color` - enables colored console levels when output goes to a terminal; file logs remain plain text.
 - `logging.verbose` - enables DEBUG-level output and adds function/line context to console messages.
 

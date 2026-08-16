@@ -301,7 +301,7 @@ def run_script(ui: UI, spec: ScriptSpec) -> int:
         ui.failure(
             "SCRIPT FAILED",
             f"{spec.label} exited with code {result.returncode}. "
-            "Review the output above and logs/realtime_cv.log for details.",
+            "Review the output above and logs/nirt_shooterbot.log for details.",
         )
     else:
         print()
@@ -328,7 +328,7 @@ def main() -> int:
         logger.exception("Scripts console failed")
         ui.failure(
             "SCRIPTS FAILED SAFELY",
-            f"{type(exc).__name__}: {exc}. See logs/realtime_cv.log for details.",
+            f"{type(exc).__name__}: {exc}. See logs/nirt_shooterbot.log for details.",
         )
         return 3
 

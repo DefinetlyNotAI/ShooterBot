@@ -45,8 +45,8 @@ class _PrettyFormatter(logging.Formatter):
 
     @staticmethod
     def _source_name(record: logging.LogRecord) -> str:
-        name = record.name.removeprefix("realtime_cv.")
-        return "app" if name == "realtime_cv" else name
+        name = record.name.removeprefix("nirt_shooterbot.")
+        return "app" if name == "nirt_shooterbot" else name
 
     def _relative_paths(self, text: str) -> str:
         root = str(self.project_root).replace("\\", "/").rstrip("/")
@@ -149,7 +149,7 @@ def setup_logging(
     log_path = (
         Path(logfile)
         if logfile
-        else Path(__file__).resolve().parents[1] / "logs" / "realtime_cv.log"
+        else Path(__file__).resolve().parents[1] / "logs" / "nirt_shooterbot.log"
     )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
@@ -169,7 +169,7 @@ def setup_logging(
         pass
 
 
-logger = logging.getLogger("realtime_cv")
+logger = logging.getLogger("nirt_shooterbot")
 
 
 def current_milli() -> int:

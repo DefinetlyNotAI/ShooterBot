@@ -41,7 +41,7 @@ def start_native_stderr_bridge() -> None:
         _native_stderr_started = True
 
     def forward() -> None:
-        library_logger = logging.getLogger("realtime_cv.library")
+        library_logger = logging.getLogger("nirt_shooterbot.library")
         try:
             with os.fdopen(
                 read_fd, "r", encoding="utf-8", errors="replace"

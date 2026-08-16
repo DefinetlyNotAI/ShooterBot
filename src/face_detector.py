@@ -27,9 +27,9 @@ from .data_sources import (
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models"
-CACHE_DIR = ROOT / ".cache" / "realtime_cv_models"
+CACHE_DIR = ROOT / ".cache" / "nirt_shooterbot_models"
 
-logger = logging.getLogger("realtime_cv.face")
+logger = logging.getLogger("nirt_shooterbot.face")
 
 PROTO_URL = OPENCV_FACE_PROTO_URL
 MODEL_URL = OPENCV_FACE_MODEL_URL

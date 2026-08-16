@@ -141,7 +141,7 @@ class SerialConfig:
 @dataclass
 class LoggingConfig:
     level: str = "INFO"
-    file: str = "logs/realtime_cv.log"
+    file: str = "logs/nirt_shooterbot.log"
     color: bool = True
     verbose: bool = False
 

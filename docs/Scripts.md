@@ -59,7 +59,7 @@ The runtime installs the project formatter before importing heavyweight
 libraries. After `configs/default.yaml` loads, logging is reconfigured using
 its level, file, color, and verbose settings. Native diagnostics written to
 stderr by libraries such as TensorFlow Lite are routed through the
-`realtime_cv.library` logger so they use the same console and file format.
+`nirt_shooterbot.library` logger so they use the same console and file format.
 
 Set `NIRT_CAPTURE_NATIVE_STDERR=0` before starting the application only if a
 native debugging tool requires direct ownership of stderr.

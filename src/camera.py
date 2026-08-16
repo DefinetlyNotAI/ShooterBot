@@ -44,7 +44,7 @@ class CameraStream:
         import logging
         import platform
 
-        logger = logging.getLogger("realtime_cv.camera")
+        logger = logging.getLogger("nirt_shooterbot.camera")
         if self._running:
             return
         # simulation path

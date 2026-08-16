@@ -1,4 +1,4 @@
-"""Entry point to run the realtime CV framework (debug mode included)."""
+"""Entry point to run NIRT ShooterBot (debug mode included)."""
 
 from __future__ import annotations
 
@@ -50,8 +50,8 @@ from typing import Any, Dict, List
 import cv2
 
 
-class RealtimeCVApplication:
-    WINDOW_NAME = "realtime-cv"
+class NIRTShooterBotApplication:
+    WINDOW_NAME = "nirt-shooterbot"
 
     def __init__(self, cfg) -> None:
         self.cfg = cfg
@@ -97,15 +97,15 @@ class RealtimeCVApplication:
             None,
         )
 
-        self.loop_logger = logging.getLogger("realtime_cv.loop")
+        self.loop_logger = logging.getLogger("nirt_shooterbot.loop")
         self.inference_logger = logging.getLogger(
-            "realtime_cv.inference"
+            "nirt_shooterbot.inference"
         )
         self.display_logger = logging.getLogger(
-            "realtime_cv.display"
+            "nirt_shooterbot.display"
         )
         self.serial_logger = logging.getLogger(
-            "realtime_cv.serial"
+            "nirt_shooterbot.serial"
         )
         logger.info(
             "Runtime components prepared: cameras=%s serial=%s tracking=%s",
@@ -1405,7 +1405,7 @@ def main() -> None:
     args = parse_args()
     cfg = load_application_config(args.config)
 
-    app = RealtimeCVApplication(cfg)
+    app = NIRTShooterBotApplication(cfg)
     app.run()
 
 

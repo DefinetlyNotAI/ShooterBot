@@ -25,7 +25,7 @@ This project is a modular real-time computer vision pipeline. The main runtime e
 Runtime logging starts with the project formatter before OpenCV or optional ML
 libraries load. Once YAML configuration is available, the logger is replaced
 with the configured level, output file, colors, and verbose context. Native
-stderr diagnostics are forwarded through `realtime_cv.library`.
+stderr diagnostics are forwarded through `nirt_shooterbot.library`.
 
 ## Detection Pipeline
 

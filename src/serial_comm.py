@@ -14,7 +14,7 @@ import threading
 import time
 from typing import Any, Callable
 
-logger = logging.getLogger("realtime_cv.serial")
+logger = logging.getLogger("nirt_shooterbot.serial")
 
 
 class SerialInterface:

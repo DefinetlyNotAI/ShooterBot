@@ -959,7 +959,7 @@ logging:
   level: INFO  # Console/file logging level.
   color: true  # Use color in interactive console output.
   verbose: false  # Include source function and line details.
-  file: logs/realtime_cv.log  # Runtime log file; kept under logs/.
+  file: logs/nirt_shooterbot.log  # Runtime log file; kept under logs/.
 debug:
   enabled: true  # Enable debug-only behavior.
   simulate_camera: {str(simulation).lower()}  # Use synthetic frames if requested.
@@ -2088,7 +2088,7 @@ ADVANCED_DEFAULTS = {
     ("serial", "baudrate"): "115200",
     ("logging", "level"): "INFO",
     ("logging", "verbose"): "false",
-    ("logging", "file"): "logs/realtime_cv.log",
+    ("logging", "file"): "logs/nirt_shooterbot.log",
     ("debug", "simulate_camera"): "false",
     ("debug", "simulation_video"): "",
 }
