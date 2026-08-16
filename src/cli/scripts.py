@@ -77,7 +77,7 @@ SCRIPTS = (
     ScriptSpec(
         "runtime_report",
         "Runtime Report",
-        "src.scripts._runtime_report",
+        "src.scripts.runtime_report",
         "Report configuration, model, Python, and package readiness.",
         config_required=False,
     ),

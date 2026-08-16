@@ -55,6 +55,7 @@ def split_updates(available: list[dict[str, object]]) -> tuple[list[dict[str, ob
 
 
 def main() -> None:
+    print("Starting outdated check with pip.. May take a while")
     result = subprocess.run(
         [sys.executable, "-m", "pip", "list", "--outdated", "--format=json"],
         cwd=ROOT,
