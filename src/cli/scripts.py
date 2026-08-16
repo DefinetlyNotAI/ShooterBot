@@ -75,6 +75,13 @@ SCRIPTS = (
         config_required=False,
     ),
     ScriptSpec(
+        "support_report",
+        "Generate GitHub Support Report",
+        "src.scripts.support_report",
+        "Create a sensitive diagnostic report under logs/ for issue reports.",
+        config_required=False,
+    ),
+    ScriptSpec(
         "detectors",
         "Inspect Detectors",
         "src.scripts.check_detectors",
@@ -230,8 +237,10 @@ def choose_script(ui: UI) -> ScriptSpec | None:
     ui.header("Project Scripts")
     ui.out("    1. Health Check", "white")
     ui.out(f"       Project scripts health check.", "dim")
+    ui.out("    2. Run All Ready Scripts", "white")
+    ui.out("       Run every ready utility in sequence; unavailable scripts are skipped.", "dim")
     enabled: dict[int, ScriptSpec] = {}
-    for number, spec in enumerate(SCRIPTS, 2):
+    for number, spec in enumerate(SCRIPTS, 3):
         issues = script_issues(spec)
         if issues:
             ui.out(
@@ -244,8 +253,8 @@ def choose_script(ui: UI) -> ScriptSpec | None:
         ui.out(f"       {spec.description}", "dim")
 
     def validate(value: str) -> int:
-        choice_to_validate = integer_value(value, 1, len(SCRIPTS) + 1)
-        if choice_to_validate != 1 and choice_to_validate not in enabled:
+        choice_to_validate = integer_value(value, 1, len(SCRIPTS) + 2)
+        if choice_to_validate not in (1, 2) and choice_to_validate not in enabled:
             raise ValueError
         return choice_to_validate
 
@@ -257,6 +266,8 @@ def choose_script(ui: UI) -> ScriptSpec | None:
     )
     if choice == 1:
         return None
+    if choice == 2:
+        return ScriptSpec("run_all", "Run All Ready Scripts", "", "")
     selected = enabled[choice]
     issues = script_issues(selected, wait_for_cuda=True)
     if issues:
@@ -290,6 +301,18 @@ def run_script(ui: UI, spec: ScriptSpec) -> int:
     return result.returncode
 
 
+def run_all_scripts(ui: UI) -> int:
+    """Run eligible scripts one by one and keep going after individual failures."""
+    failures = 0
+    for spec in SCRIPTS:
+        issues = script_issues(spec, wait_for_cuda=True)
+        if issues:
+            ui.out(f"  Skipping {spec.label}: {'; '.join(issues)}", "yellow")
+            continue
+        failures += int(run_script(ui, spec) != 0)
+    return 1 if failures else 0
+
+
 def main() -> int:
     args = SimpleNamespace(plain=False, yes=False, verbose=False)
     ui = UI(args)
@@ -298,6 +321,8 @@ def main() -> int:
         spec = choose_script(ui)
         if spec is None:
             return 0 if health_check(ui) else 2
+        if spec.key == "run_all":
+            return run_all_scripts(ui)
         return run_script(ui, spec)
     except Stop as exc:
         ui.failure("SCRIPTS STOPPED", exc)
