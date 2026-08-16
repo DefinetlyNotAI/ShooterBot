@@ -11,6 +11,7 @@ import yaml
 
 T = TypeVar("T")
 ROOT = Path(__file__).resolve().parents[1]
+CONFIG_DIR = ROOT / "configs"
 sys.path.insert(0, str(ROOT))
 
 
@@ -233,8 +234,27 @@ def normalize_single_model_path(model: Optional[str]) -> Optional[str]:
     return str(MODEL_DIR / path)
 
 
-def load_config(path: str) -> AppConfig:
-    p = Path(path)
+def resolve_config_path(path: str | Path) -> Path:
+    """Resolve a YAML config only when it remains inside root ``configs/``."""
+    candidate = Path(path)
+    resolved = (
+        candidate.resolve()
+        if candidate.is_absolute()
+        else (ROOT / candidate).resolve()
+    )
+    try:
+        resolved.relative_to(CONFIG_DIR.resolve())
+    except ValueError as exc:
+        raise ValueError(
+            "Configuration files must be inside the project's configs/ directory."
+        ) from exc
+    if resolved.suffix.lower() not in {".yaml", ".yml"}:
+        raise ValueError("Configuration files must use a .yaml or .yml extension.")
+    return resolved
+
+
+def load_config(path: str | Path) -> AppConfig:
+    p = resolve_config_path(path)
 
     if not p.exists():
         raise FileNotFoundError(f"Config file not found: {path}")

@@ -22,7 +22,7 @@ from src.ui import print_banner
 # config-specific logger is applied later by load_application_config().
 setup_logging()
 
-from src.config import load_config
+from src.config import load_config, resolve_config_path
 from src.camera import CameraManager, CameraStream
 from src.inference import DetectorManager, InferenceWorker
 from src.tracker import Tracker
@@ -1362,9 +1362,11 @@ def parse_args() -> argparse.Namespace:
 def load_application_config(config_argument: str):
     logger.info("Application config is loading.")
 
-    config_path = Path(
-        config_argument
-    ).resolve()
+    try:
+        config_path = resolve_config_path(config_argument)
+    except ValueError as exc:
+        logger.critical("Invalid configuration path: %s", exc)
+        raise SystemExit(2) from exc
     logger.debug("Resolved configuration path to %s", config_path)
 
     if not config_path.is_file():
@@ -1374,7 +1376,7 @@ def load_application_config(config_argument: str):
         )
         raise SystemExit(2)
 
-    cfg = load_config(str(config_path))
+    cfg = load_config(config_path)
 
     setup_logging(
         cfg.logging.level,
