@@ -4,7 +4,7 @@ This folder contains a minimal sketch for the current Python telemetry format.
 
 ## Files
 
-- `nirt_simple_pan_tilt.ino` - simple JSON reader for `x` / `y` target data
+- `servo_controller.ino` - simple JSON reader for `x` / `y` target data
 
 ## Notes
 
