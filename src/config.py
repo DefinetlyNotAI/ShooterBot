@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import re
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
@@ -235,22 +236,26 @@ def normalize_single_model_path(model: Optional[str]) -> Optional[str]:
 
 
 def resolve_config_path(path: str | Path) -> Path:
-    """Resolve a YAML config only when it remains inside root ``configs/``."""
-    candidate = Path(path)
-    resolved = (
-        candidate.resolve()
-        if candidate.is_absolute()
-        else (ROOT / candidate).resolve()
+    """Select a config from the trusted root ``configs/`` directory only.
+
+    User input is treated as a filename selector, never as a filesystem path.
+    This preserves ``configs/default.yaml`` while preventing traversal, absolute
+    paths, and symlink escapes from reaching a file operation.
+    """
+    requested = str(path).replace("\\", "/")
+    match = re.fullmatch(
+        r"(?:configs/)?([A-Za-z0-9][A-Za-z0-9_.-]*\.ya?ml)",
+        requested,
     )
-    try:
-        resolved.relative_to(CONFIG_DIR.resolve())
-    except ValueError as exc:
+    if match is None:
         raise ValueError(
-            "Configuration files must be inside the project's configs/ directory."
-        ) from exc
-    if resolved.suffix.lower() not in {".yaml", ".yml"}:
-        raise ValueError("Configuration files must use a .yaml or .yml extension.")
-    return resolved
+            "Configuration must be a YAML filename inside the project's configs/ directory."
+        )
+    filename = match.group(1)
+    for candidate in CONFIG_DIR.iterdir():
+        if candidate.is_file() and candidate.name == filename:
+            return candidate.resolve()
+    raise FileNotFoundError(f"Config file not found: configs/{filename}")
 
 
 def load_config(path: str | Path) -> AppConfig:
