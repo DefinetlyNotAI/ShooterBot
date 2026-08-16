@@ -1,5 +1,12 @@
+from __future__ import annotations
+
 import sys
+import time
 from pathlib import Path
+from typing import Any
+
+import cv2
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -7,46 +14,99 @@ sys.path.insert(0, str(ROOT))
 from src.config import load_config
 from src.inference import DetectorManager
 from src.visualization import draw_detection
-import cv2
-import numpy as np
-import time
-from typing import cast
 
-cfg = load_config(str(ROOT / "configs" / "debug" / "sim_debug.yaml"))
 
-# ensure simulation
-cfg.debug.simulate_camera = True
-cfg.debug.inject_fake_face = True
-# force face every frame for visible output
-cfg.inference.face_model_interval = 0.0
+def safe_str(value: Any, default: str = "obj") -> str:
+    if value is None:
+        return default
 
-dm = DetectorManager(cfg)
-# create synthetic frame
-w = getattr(cfg.camera, "width", 640)
-h = getattr(cfg.camera, "height", 360)
-frame = 255 * np.ones((h, w, 3), dtype="uint8")
-# run prediction
-res = dm.predict(frame)
-print("Detections:", res)
-# draw detections
-for d in res:
-    bbox = d.get("bbox")
-    if bbox is None:
-        continue
-    bbox = cast(tuple[int, int, int, int], bbox)
+    return str(value)
 
-    label = d.get("class_name") or d.get("label") or "obj"
-    conf = d.get("confidence", 0.0)
-    draw_detection(
-        frame,
-        bbox,
-        label=str(d.get("class_name") or d.get("label") or "obj"),
-        confidence=float(d.get("confidence") or 0.0),
+
+def main() -> None:
+    config_path = ROOT / "configs" / "debug" / "sim_debug.yaml"
+
+    cfg = load_config(str(config_path))
+
+    cfg.debug.simulate_camera = True
+    cfg.debug.inject_fake_face = True
+
+    # Force face detection every frame for visible output.
+    cfg.inference.face_model_interval = 0.0
+
+    detector_manager = DetectorManager(cfg)
+
+    frame_width = int(getattr(cfg.camera, "width", 640))
+    frame_height = int(getattr(cfg.camera, "height", 360))
+
+    frame = np.full(
+        (frame_height, frame_width, 3),
+        255,
+        dtype=np.uint8,
     )
 
-# save
-out_dir = ROOT / "files"
-out_dir.mkdir(parents=True, exist_ok=True)
-out_path = out_dir / f"annotated_{int(time.time())}.png"
-cv2.imwrite(str(out_path), frame)
-print("Saved annotated frame to", out_path)
+    detections = detector_manager.predict(frame)
+
+    print("Detections:", detections)
+
+    for detection in detections:
+        bbox_value = detection.get("bbox")
+
+        if (
+                not isinstance(bbox_value, (list, tuple))
+                or len(bbox_value) != 4
+        ):
+            continue
+
+        # noinspection DuplicatedCode
+        bbox: tuple[int, int, int, int] = (
+            int(bbox_value[0]),
+            int(bbox_value[1]),
+            int(bbox_value[2]),
+            int(bbox_value[3]),
+        )
+
+        class_name = detection.get("class_name")
+        fallback_label = detection.get("label")
+
+        label = safe_str(
+            class_name
+            if class_name is not None
+            else fallback_label,
+        )
+
+        confidence_value = detection.get("confidence")
+
+        if isinstance(confidence_value, (int, float)):
+            confidence = float(confidence_value)
+        else:
+            confidence = 0.0
+
+        draw_detection(
+            frame,
+            bbox,
+            label=label,
+            confidence=confidence,
+        )
+
+    out_dir = ROOT / "files"
+    out_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    out_path = out_dir / f"annotated_{int(time.time())}.png"
+
+    if not cv2.imwrite(str(out_path), frame):
+        raise RuntimeError(
+            f"Failed to save annotated frame to {out_path}"
+        )
+
+    print(
+        "Saved annotated frame to",
+        str(out_path),
+    )
+
+
+if __name__ == "__main__":
+    main()

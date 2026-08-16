@@ -116,6 +116,7 @@ def main() -> None:
         if not isinstance(bbox_value, (list, tuple)) or len(bbox_value) != 4:
             continue
 
+        # noinspection DuplicatedCode
         bbox: tuple[int, int, int, int] = (
             int(bbox_value[0]),
             int(bbox_value[1]),
