@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.metadata
+import hashlib
 import os
 import platform
 import queue
@@ -29,6 +30,7 @@ if str(ROOT) not in sys.path:
 from src.data_sources import (
     MAX_EXTERNAL_DOWNLOAD_BYTES,
     MODEL_DOWNLOAD_URLS,
+    MODEL_SHA256,
     PYTORCH_CUDA_WHEEL_INDEX,
     TRUSTED_DOWNLOAD_HOSTS,
 )
@@ -1478,6 +1480,25 @@ def download_to_temp(
         raise
 
 
+def file_sha256(path: Path) -> str:
+    """Return a file digest without loading the complete model into memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_model_hash(name: str, path: Path) -> None:
+    """Reject unpinned or altered model artefacts before they are installed."""
+    expected = MODEL_SHA256.get(name)
+    if not expected:
+        raise Stop(f"No SHA-256 pin is configured for {name}; install it manually.")
+    actual = file_sha256(path)
+    if actual.lower() != expected.lower():
+        raise Stop(f"SHA-256 verification failed for {name}; partial file was removed.")
+
+
 def download_model_asset(ui, name, url, destination):
     """Download one model atomically for the Health Check repair pass."""
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -1495,6 +1516,7 @@ def download_model_asset(ui, name, url, destination):
         if received < 1024 or (total and received != total):
             raise Stop(f"Incomplete model repair for {name}.")
 
+        verify_model_hash(name, temp_path)
         temp_path.replace(destination)
         CREATED_MODELS.append(destination)
 
@@ -1722,6 +1744,7 @@ def install_models(ui):
                 raise Stop(f"Incomplete download for {name}.")
             if temp_path.stat().st_size < 1024:
                 raise Stop(f"Downloaded model {name} is unexpectedly small.")
+            verify_model_hash(name, temp_path)
             temp_path.replace(destination)
             CREATED_MODELS.append(destination)
             ui.progress_bytes(

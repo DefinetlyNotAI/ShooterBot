@@ -16,6 +16,18 @@ MODEL_DOWNLOAD_URLS: Final[dict[str, str]] = {
     "yolov10n-face.pt": "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov10n-face.pt",
 }
 
+# SHA-256 pins for model artefacts that are distributed by the project.
+# A model without a pin is deliberately never downloaded automatically.
+MODEL_SHA256: Final[dict[str, str]] = {
+    "yolov8n.pt": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+    "yolov8m.pt": "5d4a90cdc7a21786cc59cd19778e9eafff836df9e2da32524737c7ee6efe4fe5",
+    "yolo26n-face.pt": "c6a5405127a2e351292315a6a8084ea3e790dbec25b9d16a8e80d1e3f866efe1",
+    "yolo26n.pt": "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
+    "yolov11m-face.pt": "6ccbe920c1fac95ed84de570519e89fbe24d326d466a7aae297960b3ecc6c661",
+    "yolov11l-face.pt": "ba0000a5945ef6c4b5841b06478ff9a55649073d01cf98f382dd4991100c9514",
+    "yolov10n-face.pt": "58bc4397f6e5a1cd69411cf46615e60b9bd89a00c1dfd92307f873f626528c18",
+}
+
 OPENCV_FACE_PROTO_URL: Final = (
     "https://raw.githubusercontent.com/opencv/opencv/master/"
     "samples/dnn/face_detector/deploy.prototxt"
