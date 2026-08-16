@@ -4,7 +4,60 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import warnings
+
+
+_native_stderr_lock = threading.Lock()
+_native_stderr_started = False
+
+
+def _native_log_level(message: str) -> int:
+    """Map common native-library prefixes to Python logging levels."""
+    upper = message.upper()
+    if upper.startswith(("FATAL", "ERROR", "E")):
+        return logging.ERROR
+    if "WARNING" in upper or upper.startswith("W"):
+        return logging.WARNING
+    if upper.startswith("DEBUG"):
+        return logging.DEBUG
+    return logging.INFO
+
+
+def start_native_stderr_bridge() -> None:
+    """Route native stderr diagnostics through the project's logger once."""
+    global _native_stderr_started
+    with _native_stderr_lock:
+        if _native_stderr_started or os.environ.get(
+            "NIRT_CAPTURE_NATIVE_STDERR", "1"
+        ) == "0":
+            return
+        try:
+            read_fd, write_fd = os.pipe()
+            os.dup2(write_fd, 2)
+            os.close(write_fd)
+        except OSError:
+            return
+        _native_stderr_started = True
+
+    def forward() -> None:
+        library_logger = logging.getLogger("realtime_cv.library")
+        try:
+            with os.fdopen(
+                read_fd, "r", encoding="utf-8", errors="replace"
+            ) as stream:
+                for line in stream:
+                    message = line.strip()
+                    if message:
+                        library_logger.log(_native_log_level(message), "%s", message)
+        except OSError:
+            return
+
+    threading.Thread(
+        target=forward,
+        name="native-stderr-logger",
+        daemon=True,
+    ).start()
 
 
 def configure_library_noise() -> None:

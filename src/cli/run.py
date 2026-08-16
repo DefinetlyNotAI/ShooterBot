@@ -107,6 +107,12 @@ class RealtimeCVApplication:
         self.serial_logger = logging.getLogger(
             "realtime_cv.serial"
         )
+        logger.info(
+            "Runtime components prepared: cameras=%s serial=%s tracking=%s",
+            len(cfg.camera.sources),
+            "simulation" if self.serial.simulation else "hardware",
+            self.track_only or "all classes",
+        )
 
     def _create_tracker(self):
         cfg = self.cfg
@@ -117,6 +123,13 @@ class RealtimeCVApplication:
         else:
             max_age = int(cfg.tracking.max_lost)
 
+        logger.debug(
+            "Creating tracker max_lost=%s max_age=%s min_hits=%s iou=%s",
+            cfg.tracking.max_lost,
+            max_age,
+            getattr(cfg.tracking, "min_hits", 1),
+            cfg.tracking.iou_threshold,
+        )
         return Tracker(
             max_lost=int(cfg.tracking.max_lost),
             iou_threshold=float(cfg.tracking.iou_threshold),
@@ -152,6 +165,12 @@ class RealtimeCVApplication:
             else True
         )
 
+        logger.info(
+            "Preparing serial interface port=%s baudrate=%s mode=%s",
+            cfg.serial.port,
+            cfg.serial.baudrate,
+            "simulation" if simulation else "hardware",
+        )
         return SerialInterface(
             port=cfg.serial.port,
             baudrate=cfg.serial.baudrate,
@@ -164,6 +183,14 @@ class RealtimeCVApplication:
 
         for source in cfg.camera.sources:
             simulate = self._should_simulate_camera(source)
+            logger.info(
+                "Preparing camera source=%s mode=%s resolution=%sx%s fps=%s",
+                source,
+                "simulation" if simulate else "hardware",
+                cfg.camera.width,
+                cfg.camera.height,
+                cfg.camera.fps,
+            )
 
             camera = CameraStream(
                 source=source,
@@ -186,6 +213,8 @@ class RealtimeCVApplication:
 
             self.cam_mgr.add(camera)
 
+        logger.info("Configured %s camera stream(s)", len(cfg.camera.sources))
+
     def _should_simulate_camera(self, source) -> bool:
         if self.cfg.debug.simulate_camera:
             return True
@@ -202,6 +231,7 @@ class RealtimeCVApplication:
                 test_cap.release()
 
             if opened:
+                logger.debug("Camera %s passed startup availability check", source)
                 return False
 
             logger.warning(
@@ -245,10 +275,12 @@ class RealtimeCVApplication:
             )
 
     def _setup_serial(self) -> None:
+        self.serial_logger.info("Starting serial interface")
         self.serial.set_receive_callback(self._on_receive)
         self.serial.start()
 
     def _setup_window(self) -> None:
+        self.display_logger.info("Creating display window '%s'", self.WINDOW_NAME)
         cv2.namedWindow(
             self.WINDOW_NAME,
             cv2.WINDOW_NORMAL,
@@ -260,10 +292,12 @@ class RealtimeCVApplication:
         )
 
     def _start(self) -> None:
+        logger.info("Starting camera, detector, serial, and display components")
         self._setup_cameras()
         self._log_detectors()
 
         self.inf_worker.start()
+        self.inference_logger.info("Inference worker started")
 
         self._setup_serial()
         self._setup_window()
@@ -292,6 +326,7 @@ class RealtimeCVApplication:
         with self._shot_lock:
             self._shot_requested = True
             self._shot_target_id = target_id
+        self.serial_logger.debug("Shot request received for target=%s", target_id)
 
     def _consume_shot(
             self,
@@ -313,12 +348,14 @@ class RealtimeCVApplication:
                 "utf-8",
                 errors="ignore",
             ).strip()
+            self.serial_logger.debug("Received serial payload: %s", text)
 
             if text.upper() in {
                 "SHOT",
                 "HIT",
                 "TRIGGER",
             }:
+                self.serial_logger.info("Received serial shot event '%s'", text)
                 self._request_shot()
                 return
 
@@ -330,6 +367,7 @@ class RealtimeCVApplication:
                     or str(payload.get("event", "")).lower()
                     in {"shot", "hit"}
             ):
+                self.serial_logger.info("Received serial shot event payload")
                 requested_id = payload.get("id")
 
                 self._request_shot(
@@ -1242,6 +1280,7 @@ class RealtimeCVApplication:
 
     def run(self) -> None:
         self._start()
+        logger.info("Runtime event loop started")
 
         try:
             while True:
@@ -1274,6 +1313,7 @@ class RealtimeCVApplication:
             self.shutdown()
 
     def shutdown(self) -> None:
+        logger.info("Stopping runtime components")
         try:
             self.inf_worker.stop()
         except Exception:
@@ -1299,6 +1339,7 @@ class RealtimeCVApplication:
             )
 
         cv2.destroyAllWindows()
+        logger.info("Runtime shutdown complete")
 
 
 def parse_args() -> argparse.Namespace:
@@ -1319,6 +1360,7 @@ def load_application_config(config_argument: str):
     config_path = Path(
         config_argument
     ).resolve()
+    logger.debug("Resolved configuration path to %s", config_path)
 
     if not config_path.is_file():
         logger.critical(
@@ -1335,6 +1377,11 @@ def load_application_config(config_argument: str):
         color=cfg.logging.color,
         verbose=cfg.logging.verbose,
     )
+    logger.info(
+        "Logging reconfigured from configuration level=%s verbose=%s",
+        cfg.logging.level,
+        cfg.logging.verbose,
+    )
 
     try:
         check_runtime_setup(cfg)
@@ -1345,6 +1392,8 @@ def load_application_config(config_argument: str):
             exc,
         )
         raise SystemExit(2) from exc
+
+    logger.info("Runtime setup check passed")
 
     return cfg
 

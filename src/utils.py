@@ -7,6 +7,7 @@ import math
 import os
 import re
 import shutil
+import sys
 import textwrap
 import time
 from pathlib import Path
@@ -127,7 +128,9 @@ def setup_logging(
         pass
     configured_level = getattr(logging, level.upper(), logging.INFO)
     lvl = logging.DEBUG if verbose else configured_level
-    stream = logging.StreamHandler()
+    # Native-library stderr is bridged into logging, so application logs must
+    # use stdout to avoid feeding the bridge back into itself.
+    stream = logging.StreamHandler(sys.stdout)
     # Avoid escape sequences in redirected output and CI logs.
     use_color = bool(
         color
@@ -152,6 +155,12 @@ def setup_logging(
     )
     handlers.append(file_handler)
     logging.basicConfig(level=lvl, handlers=handlers, force=True)
+    try:
+        from .noise_control import start_native_stderr_bridge
+
+        start_native_stderr_bridge()
+    except Exception:
+        pass
 
 
 logger = logging.getLogger("realtime_cv")
