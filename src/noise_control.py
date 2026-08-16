@@ -36,17 +36,17 @@ def configure_library_noise() -> None:
     )
     logging.captureWarnings(True)
     for name in (
-        "absl",
-        "tensorflow",
-        "tensorflow Lite",
-        "transformers",
-        "huggingface_hub",
-        "urllib3",
-        "mediapipe",
-        "matplotlib",
-        "PIL",
-        "torch",
-        "ultralytics",
+            "absl",
+            "tensorflow",
+            "tensorflow Lite",
+            "transformers",
+            "huggingface_hub",
+            "urllib3",
+            "mediapipe",
+            "matplotlib",
+            "PIL",
+            "torch",
+            "ultralytics",
     ):
         logging.getLogger(name).setLevel(logging.ERROR)
 

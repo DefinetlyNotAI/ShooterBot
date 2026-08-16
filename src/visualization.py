@@ -23,7 +23,7 @@ def _rounded_box(frame, x1, y1, x2, y2, color, thickness=2, radius=8):
 
 
 def draw_center_ui(
-    frame: np.ndarray, serial_center: tuple | None = None, color=(0, 200, 200)
+        frame: np.ndarray, serial_center: tuple | None = None, color=(0, 200, 200)
 ) -> None:
     # draw static center crosshair and moving dot if serial_center provided
     h, w = frame.shape[:2]
@@ -62,13 +62,13 @@ def draw_center_ui(
 
 
 def draw_detection(
-    frame: np.ndarray,
-    bbox: Tuple[int, int, int, int],
-    label: str = "",
-    confidence: float = 0.0,
-    color=(0, 255, 0),
-    font_scale=0.5,
-    thickness: int = 2,
+        frame: np.ndarray,
+        bbox: Tuple[int, int, int, int],
+        label: str = "",
+        confidence: float = 0.0,
+        color=(0, 255, 0),
+        font_scale=0.5,
+        thickness: int = 2,
 ) -> None:
     x1, y1, x2, y2 = map(int, bbox)
     # shadow for depth
@@ -111,7 +111,7 @@ def draw_detection(
 
 
 def draw_track(
-    frame: np.ndarray, track: Track, color=(255, 0, 0), font_scale=0.5
+        frame: np.ndarray, track: Track, color=(255, 0, 0), font_scale=0.5
 ) -> None:
     x1, y1, x2, y2 = map(int, track.bbox)
     # bolder border for tracked object
@@ -160,9 +160,9 @@ def draw_track(
 
 
 def draw_top_left_panel(
-    frame: np.ndarray,
-    tracked: dict | None = None,
-    looking_for: list | None = None,
+        frame: np.ndarray,
+        tracked: dict | None = None,
+        looking_for: list | None = None,
 ) -> None:
     # Draw a compact top-left panel showing the tracked object information and thumbnail
     h, w = frame.shape[:2]
@@ -232,7 +232,7 @@ def draw_top_left_panel(
                     )
                     ty = y1 + 58
                     tx = x1 + 8
-                    frame[ty : ty + th, tx : tx + tw] = thumb
+                    frame[ty: ty + th, tx: tx + tw] = thumb
                     cv2.rectangle(
                         frame,
                         (tx - 1, ty - 1),
@@ -256,7 +256,7 @@ def draw_top_left_panel(
 
 
 def draw_tracking_queue(
-    frame: np.ndarray, target_ids: list[int], current_id: int | None = None
+        frame: np.ndarray, target_ids: list[int], current_id: int | None = None
 ) -> None:
     """Draw the optional operator submenu for the target rotation queue."""
     if not target_ids:
@@ -295,13 +295,13 @@ def draw_tracking_queue(
 
 
 def show_info(
-    frame: np.ndarray,
-    fps: float,
-    inference_time_ms: float,
-    device: str = "cpu",
-    detections: int = 0,
-    tracks: int = 0,
-    font_scale_override: float | None = None,
+        frame: np.ndarray,
+        fps: float,
+        inference_time_ms: float,
+        device: str = "cpu",
+        detections: int = 0,
+        tracks: int = 0,
+        font_scale_override: float | None = None,
 ) -> None:
     # Bottom-left translucent panel for system info (compact, more numeric stats)
     h, w = frame.shape[:2]

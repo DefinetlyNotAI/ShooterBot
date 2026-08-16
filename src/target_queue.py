@@ -45,10 +45,10 @@ class TargetQueue:
 
         for track in tracks:
             if (
-                track.confirmed
-                and track.lost == 0
-                and (self.cycle_remember or track.id not in self.hit_ids)
-                and track.id not in self._queued
+                    track.confirmed
+                    and track.lost == 0
+                    and (self.cycle_remember or track.id not in self.hit_ids)
+                    and track.id not in self._queued
             ):
                 self._queue.append(track.id)
                 self._queued.add(track.id)

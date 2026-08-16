@@ -36,8 +36,8 @@ def choose_device(device: str) -> str:
                 )
 
                 if (
-                    hasattr(torch.cuda, "is_built")
-                    and not torch.cuda.is_built()
+                        hasattr(torch.cuda, "is_built")
+                        and not torch.cuda.is_built()
                 ):
                     logger.warning(
                         "PyTorch was installed without CUDA support. "
@@ -88,11 +88,11 @@ class YOLODetector:
     """Wrapper around ultralytics YOLO model with automatic model selection based on device."""
 
     def __init__(
-        self,
-        model: str = "yolov8n.pt",
-        device: str = "auto",
-        cache_dir: Optional[str] = None,
-        prefer_high_quality: bool = True,
+            self,
+            model: str = "yolov8n.pt",
+            device: str = "auto",
+            cache_dir: Optional[str] = None,
+            prefer_high_quality: bool = True,
     ):
         try:
             from ultralytics import YOLO
@@ -123,8 +123,8 @@ class YOLODetector:
         self.model_name = selected_model
         # If running on CPU, prefer smaller model for realtime; downgrade very large models automatically
         if self.device.startswith("cpu") and self.model_name in (
-            "yolov8x.pt",
-            "yolov8m.pt",
+                "yolov8x.pt",
+                "yolov8m.pt",
         ):
             logger.warning(
                 "Running on CPU: switching model %s -> yolov8n.pt for better realtime performance",
@@ -220,7 +220,7 @@ class YOLODetector:
                 raise
 
     def predict(
-        self, frame: np.ndarray, conf: float = 0.25
+            self, frame: np.ndarray, conf: float = 0.25
     ) -> List[Dict[str, Any]]:
 
         h, w = map(int, frame.shape[:2])
@@ -542,8 +542,8 @@ class DetectorManager:
                         # YOLODetector exposes model_name attribute
                         mname = getattr(_obj, "model_name", None)
                         if (
-                            mname
-                            and Path(str(mname)).name.lower() == cand_name
+                                mname
+                                and Path(str(mname)).name.lower() == cand_name
                         ):
                             return True
                     except Exception:
@@ -598,7 +598,7 @@ class DetectorManager:
                 )
 
                 if (getattr(fd, "net", None) is not None) or (
-                    getattr(fd, "yolo", None) is not None
+                        getattr(fd, "yolo", None) is not None
                 ):
                     self.detectors["face"] = {
                         "type": "face",
@@ -625,15 +625,15 @@ class DetectorManager:
                 # throttle it
                 if self.device.startswith("cpu"):
                     if (
-                        "face" in name.lower()
-                        or "face" in str(model_name).lower()
+                            "face" in name.lower()
+                            or "face" in str(model_name).lower()
                     ):
                         interval = getattr(
                             self.config.inference, "face_model_interval", 0.4
                         )
                     elif (
-                        "x" in str(model_name).lower()
-                        or "m" in str(model_name).lower()
+                            "x" in str(model_name).lower()
+                            or "m" in str(model_name).lower()
                     ):
                         interval = getattr(
                             self.config.inference, "heavy_model_interval", 0.3
@@ -647,7 +647,7 @@ class DetectorManager:
             self._intervals[name] = float(interval)
 
     def _dedupe_by_iou(
-        self, dets: List[Dict[str, Any]], iou_thr: float = 0.5
+            self, dets: List[Dict[str, Any]], iou_thr: float = 0.5
     ) -> List[Dict[str, Any]]:
         """Greedy deduplication with class-priority support.
 
@@ -658,9 +658,9 @@ class DetectorManager:
             return []
         # build class priority mapping (higher index -> higher priority)
         priority_list = (
-            getattr(self.config.tracking, "class_priority", None)
-            or getattr(self.config.inference, "class_priority", [])
-            or []
+                getattr(self.config.tracking, "class_priority", None)
+                or getattr(self.config.inference, "class_priority", [])
+                or []
         )
         priority_map = {
             name.lower(): i for i, name in enumerate(priority_list[::-1])
@@ -671,7 +671,7 @@ class DetectorManager:
             return priority_map.get(name, 0)
 
         def _bbox_tuple(
-            det: Dict[str, Any],
+                det: Dict[str, Any],
         ) -> Tuple[float, float, float, float]:
             x1, y1, x2, y2 = det["bbox"]
             return float(x1), float(y1), float(x2), float(y2)
@@ -708,7 +708,7 @@ class DetectorManager:
         return keep
 
     def _filter_detections(
-        self, dets: List[Dict[str, Any]], frame_shape: Tuple[int, int]
+            self, dets: List[Dict[str, Any]], frame_shape: Tuple[int, int]
     ) -> List[Dict[str, Any]]:
         """Apply confidence, class and size filters from config.
 
@@ -721,7 +721,7 @@ class DetectorManager:
         if getattr(self.config.inference, "classes", None):
             allowed = set(self.config.inference.classes)
         raw_ignored = (
-            getattr(self.config.inference, "ignored_classes", []) or []
+                getattr(self.config.inference, "ignored_classes", []) or []
         )
         ignored_names = set()
         ignored_ids = set()
@@ -748,7 +748,7 @@ class DetectorManager:
         for d in dets:
             conf = float(d.get("confidence", 0.0))
             if conf < getattr(
-                self.config.inference, "confidence_threshold", 0.25
+                    self.config.inference, "confidence_threshold", 0.25
             ):
                 continue
             cls = int(d.get("class_id", -1))
@@ -893,8 +893,8 @@ class DetectorManager:
                 det_name = str(d.get("detector", "")).lower()
 
                 if (
-                    "face" in det_name
-                    or int(d.get("detector_priority", 0)) >= 10
+                        "face" in det_name
+                        or int(d.get("detector_priority", 0)) >= 10
                 ):
                     d["label"] = "face"
                     d["class_name"] = "face"
@@ -920,10 +920,10 @@ class DetectorManager:
 
         # Debug fake face injection
         if (
-            getattr(self.config, "debug", None)
-            and getattr(self.config.debug, "simulate_camera", False)
-            and getattr(self.config.debug, "inject_fake_face", False)
-            and not dets
+                getattr(self.config, "debug", None)
+                and getattr(self.config.debug, "simulate_camera", False)
+                and getattr(self.config.debug, "inject_fake_face", False)
+                and not dets
         ):
             h, w = frame.shape[:2]
 
@@ -949,7 +949,7 @@ class DetectorManager:
 
     @staticmethod
     def text_search(
-        query: str, method: str = "fuzzy"
+            query: str, method: str = "fuzzy"
     ) -> List[Tuple[str, int, float]]:
         try:
             from .coco import find_closest_class

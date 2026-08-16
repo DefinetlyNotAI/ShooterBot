@@ -51,7 +51,7 @@ def main():
     if not os.path.isfile(config_path):
         print(
             "Configuration was not found: " + config_path + "\n"
-            "Run the installer first: python -m src.cli.installer"
+                                                            "Run the installer first: python -m src.cli.installer"
         )
         raise SystemExit(2)
     cfg = load_config(config_path)
@@ -203,9 +203,9 @@ def main():
                 return
             payload = json.loads(text)
             if (
-                payload.get("shot") is True
-                or payload.get("hit") is True
-                or str(payload.get("event", "")).lower() in {"shot", "hit"}
+                    payload.get("shot") is True
+                    or payload.get("hit") is True
+                    or str(payload.get("event", "")).lower() in {"shot", "hit"}
             ):
                 requested_id = payload.get("id")
                 _request_shot(
@@ -214,9 +214,9 @@ def main():
                 return
             # support both legacy 'nc' and simplified 'x','y' telemetry
             if (
-                "nc" in payload
-                and isinstance(payload.get("nc"), list)
-                and len(payload.get("nc")) == 2
+                    "nc" in payload
+                    and isinstance(payload.get("nc"), list)
+                    and len(payload.get("nc")) == 2
             ):
                 nc = payload.get("nc")
                 serial_center["nc"] = (float(nc[0]), float(nc[1]))
@@ -305,12 +305,12 @@ def main():
                 if fresh_result:
                     for detection in dets:
                         if (
-                            str(
-                                detection.get(
-                                    "class_name", detection.get("label", "")
-                                )
-                            ).lower()
-                            == "face"
+                                str(
+                                    detection.get(
+                                        "class_name", detection.get("label", "")
+                                    )
+                                ).lower()
+                                == "face"
                         ):
                             detection["appearance"] = face_appearance(
                                 frame, detection.get("bbox")
@@ -378,7 +378,7 @@ def main():
                         tcx = (tr.bbox[0] + tr.bbox[2]) / 2.0
                         tcy = (tr.bbox[1] + tr.bbox[3]) / 2.0
                         return (
-                            (cx - tcx) ** 2 + (cy - tcy) ** 2
+                                (cx - tcx) ** 2 + (cy - tcy) ** 2
                         ) ** 0.5 <= thresh_px
                     except Exception:
                         return False
@@ -403,8 +403,8 @@ def main():
                             dcx = (bbox[0] + bbox[2]) / 2.0
                             dcy = (bbox[1] + bbox[3]) / 2.0
                             dist = (
-                                (dcx - frame_cx) ** 2 + (dcy - frame_cy) ** 2
-                            ) ** 0.5
+                                           (dcx - frame_cx) ** 2 + (dcy - frame_cy) ** 2
+                                   ) ** 0.5
                             if dist <= center_thresh_px:
                                 color = (0, 200, 0)  # green when centered
                             else:
@@ -468,13 +468,13 @@ def main():
                         pcx = (primary.bbox[0] + primary.bbox[2]) / 2.0
                         pcy = (primary.bbox[1] + primary.bbox[3]) / 2.0
                         distc = (
-                            (pcx - frame_cx) ** 2 + (pcy - frame_cy) ** 2
-                        ) ** 0.5
+                                        (pcx - frame_cx) ** 2 + (pcy - frame_cy) ** 2
+                                ) ** 0.5
                         track_color = (
                             (0, 200, 0)
                             if (
-                                not serial.simulation
-                                and distc <= center_thresh_px
+                                    not serial.simulation
+                                    and distc <= center_thresh_px
                             )
                             else (0, 180, 80)
                         )
@@ -574,8 +574,8 @@ def main():
                             iter(detector.detectors.values())
                         )
                         device_name = (
-                            getattr(first_detector.get("obj"), "device", None)
-                            or "cpu"
+                                getattr(first_detector.get("obj"), "device", None)
+                                or "cpu"
                         )
                     except Exception:
                         device_name = "cpu"

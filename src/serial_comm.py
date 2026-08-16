@@ -18,12 +18,12 @@ logger = logging.getLogger("realtime_cv.serial")
 
 class SerialInterface:
     def __init__(
-        self,
-        port: str = "COM3",
-        baudrate: int = 115200,
-        crc: bool = True,
-        simulation: bool = True,
-        ack_timeout: float = 1.0,
+            self,
+            port: str = "COM3",
+            baudrate: int = 115200,
+            crc: bool = True,
+            simulation: bool = True,
+            ack_timeout: float = 1.0,
     ) -> None:
         self.port = port
         self.baudrate = baudrate
@@ -161,8 +161,8 @@ class SerialInterface:
         self._thread = None
 
     def set_receive_callback(
-        self,
-        callback: Callable[[bytes], None] | None,
+            self,
+            callback: Callable[[bytes], None] | None,
     ) -> None:
         self._on_receive = callback
 
@@ -188,9 +188,9 @@ class SerialInterface:
         return crc.to_bytes(4, "big")
 
     def send_packet(
-        self,
-        payload: bytes,
-        require_ack: bool = False,
+            self,
+            payload: bytes,
+            require_ack: bool = False,
     ) -> bool:
         packet = payload
 
@@ -249,9 +249,9 @@ class SerialInterface:
                 return False
 
     def send_json(
-        self,
-        obj: dict[str, Any],
-        require_ack: bool = False,
+            self,
+            obj: dict[str, Any],
+            require_ack: bool = False,
     ) -> bool:
         data = json.dumps(
             obj,
@@ -264,16 +264,16 @@ class SerialInterface:
         )
 
     def send_telemetry(
-        self,
-        object_id: int,
-        class_name: str,
-        confidence: float,
-        normalized_center: list[float],
-        velocity: list[float],
-        timestamp: float,
-        predicted_center: list[float] | None = None,
-        require_ack: bool = False,
-        advanced: bool = False,
+            self,
+            object_id: int,
+            class_name: str,
+            confidence: float,
+            normalized_center: list[float],
+            velocity: list[float],
+            timestamp: float,
+            predicted_center: list[float] | None = None,
+            require_ack: bool = False,
+            advanced: bool = False,
     ) -> bool:
         """Send object telemetry over the serial connection.
 

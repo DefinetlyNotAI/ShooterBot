@@ -39,10 +39,10 @@ def _download(url: str, dst: Path) -> None:
 
 class FaceDetector:
     def __init__(
-        self,
-        cache_dir: Path | None = None,
-        conf: float = 0.5,
-        model_path: Optional[str] = None,
+            self,
+            cache_dir: Path | None = None,
+            conf: float = 0.5,
+            model_path: Optional[str] = None,
     ):
         """If model_path endswith .pt, use ultralytics YOLO for face detection. Otherwise, use OpenCV DNN SSD."""
         self.cache_dir = Path(cache_dir) if cache_dir else CACHE_DIR
@@ -97,7 +97,7 @@ class FaceDetector:
         if self.backend == "opencv":
             self.proto = self.cache_dir / "deploy.prototxt"
             self.model = (
-                self.cache_dir / "res10_300x300_ssd_iter_140000.caffemodel"
+                    self.cache_dir / "res10_300x300_ssd_iter_140000.caffemodel"
             )
             if not self.proto.exists() or not self.model.exists():
                 try:
@@ -121,8 +121,8 @@ class FaceDetector:
             if self.net is None:
                 try:
                     cascade_path = (
-                        cv2.data.haarcascades
-                        + "haarcascade_frontalface_default.xml"
+                            cv2.data.haarcascades
+                            + "haarcascade_frontalface_default.xml"
                     )
                     if Path(cascade_path).exists():
                         self.cascade = cv2.CascadeClassifier(cascade_path)

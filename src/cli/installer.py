@@ -5,19 +5,19 @@ from __future__ import annotations
 import importlib.metadata
 import os
 import platform
+import queue
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
-import queue
-import threading
-from types import SimpleNamespace
 import urllib.error
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "configs" / "default.yaml"
@@ -149,9 +149,9 @@ class UI:
 
     def __init__(self, args):
         self.plain = (
-            args.plain
-            or bool(os.environ.get("NO_COLOR"))
-            or not getattr(sys.stdout, "isatty", lambda: False)()
+                args.plain
+                or bool(os.environ.get("NO_COLOR"))
+                or not getattr(sys.stdout, "isatty", lambda: False)()
         )
         self.yes = args.yes
         self.verbose = args.verbose
@@ -201,7 +201,7 @@ class UI:
         print(self.color(rendered, "cyan"), end=end, flush=True)
 
     def progress_bytes(
-        self, label, current_bytes, total_bytes=None, detail="", done=False
+            self, label, current_bytes, total_bytes=None, detail="", done=False
     ):
         if total_bytes:
             width = 28
@@ -250,11 +250,11 @@ class UI:
         self.out("=" * 72, "blue")
 
     def ask(
-        self,
-        text,
-        default="",
-        validator=None,
-        invalid_message="Invalid input.",
+            self,
+            text,
+            default="",
+            validator=None,
+            invalid_message="Invalid input.",
     ):
         if self.yes:
             return default
@@ -283,8 +283,8 @@ class UI:
         try:
             log_event(f"PROMPT: {text} [default={default}]")
             if (
-                os.name == "nt"
-                and getattr(sys.stdin, "isatty", lambda: False)()
+                    os.name == "nt"
+                    and getattr(sys.stdin, "isatty", lambda: False)()
             ):
                 return self._ask_windows(text, default)
             if self.plain:
@@ -519,12 +519,12 @@ def preflight(ui):
 
 
 def pip(
-    ui,
-    packages,
-    description,
-    download_options=None,
-    install_options=None,
-    cleanup_distributions=None,
+        ui,
+        packages,
+        description,
+        download_options=None,
+        install_options=None,
+        cleanup_distributions=None,
 ):
     if not packages:
         return
@@ -747,7 +747,7 @@ def drain_pip_status(messages, current):
 
 
 def size_to_bytes(amount, unit):
-    multipliers = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3}
+    multipliers = {"B": 1, "KB": 1024, "MB": 1024 ** 2, "GB": 1024 ** 3}
     return int(float(amount) * multipliers[unit.upper()])
 
 
@@ -766,12 +766,12 @@ def compact_pip_text(text):
     text = re.sub(r"https?://\S+", "download", text)
     text = re.sub(r"\s+", " ", text).strip()
     for prefix in (
-        "Downloading ",
-        "Collecting ",
-        "Installing collected packages: ",
+            "Downloading ",
+            "Collecting ",
+            "Installing collected packages: ",
     ):
         if text.startswith(prefix):
-            text = prefix.rstrip(": ") + ": " + text[len(prefix) :]
+            text = prefix.rstrip(": ") + ": " + text[len(prefix):]
     return text[:42]
 
 
@@ -936,7 +936,7 @@ debug:
 
 
 def update_existing_config(
-    camera, width, height, fps, device, remember, emotion, hands, simulation
+        camera, width, height, fps, device, remember, emotion, hands, simulation
 ):
     """Update only known installer settings and preserve custom YAML content."""
     text = CONFIG.read_text(encoding="utf-8")
@@ -1242,8 +1242,8 @@ def health_check(ui):
         )
 
     for key, label in (
-        ("emotion", "Emotion tracking"),
-        ("hands", "Hand tracking"),
+            ("emotion", "Emotion tracking"),
+            ("hands", "Hand tracking"),
     ):
         if configured_feature_enabled(key):
             feature_ok = optional_ready(key)
@@ -1385,10 +1385,10 @@ def download_model_asset(ui, name, url, destination):
         with urllib.request.urlopen(request, timeout=60) as response:
             total = int(response.headers.get("Content-Length", "0") or 0)
             with tempfile.NamedTemporaryFile(
-                prefix=f".{name}.",
-                suffix=".part",
-                dir=destination.parent,
-                delete=False,
+                    prefix=f".{name}.",
+                    suffix=".part",
+                    dir=destination.parent,
+                    delete=False,
             ) as temp:
                 temp_path = Path(temp.name)
                 received = 0
@@ -1478,8 +1478,8 @@ def optional_ready(key):
         if key == "hands" and installed_version("mediapipe") != "0.10.21":
             return False
         if key == "semantic" and not (
-            version_at_least("scikit-learn", "1.2.2")
-            and version_at_least("sentence-transformers", "2.2.2")
+                version_at_least("scikit-learn", "1.2.2")
+                and version_at_least("sentence-transformers", "2.2.2")
         ):
             return False
         if key == "scipy" and not version_at_least("scipy", "1.10"):
@@ -1621,10 +1621,10 @@ def install_models(ui):
             with urllib.request.urlopen(request, timeout=60) as response:
                 total = int(response.headers.get("Content-Length", "0") or 0)
                 with tempfile.NamedTemporaryFile(
-                    prefix=f".{name}.",
-                    suffix=".part",
-                    dir=model_dir,
-                    delete=False,
+                        prefix=f".{name}.",
+                        suffix=".part",
+                        dir=model_dir,
+                        delete=False,
                 ) as temp:
                     temp_path = Path(temp.name)
                     received = 0
@@ -1774,9 +1774,9 @@ def configure_model_choices(ui, model_dir, allow_edit=True):
                 )
     if len(general) > 1:
         if (
-            configured_general
-            and len(configured_general) == len(general)
-            and set(configured_general) == set(general)
+                configured_general
+                and len(configured_general) == len(general)
+                and set(configured_general) == set(general)
         ):
             ui.out(
                 "  General model order from config: "
@@ -1802,7 +1802,7 @@ def configure_model_choices(ui, model_dir, allow_edit=True):
             )
             ordered = raw.split(",")
             if ui.yn(
-                "Save this general-model order to the configuration", True
+                    "Save this general-model order to the configuration", True
             ):
                 update_config_models(
                     ordered,
@@ -1821,7 +1821,7 @@ def validate_model_order(value, available_names):
         if item.strip()
     ]
     if len(names) != len(available_names) or set(names) != set(
-        available_names
+            available_names
     ):
         raise ValueError
     return ",".join(names)
@@ -2294,12 +2294,12 @@ def write_config_atomically(text):
     temporary = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=CONFIG.parent,
-            prefix=f".{CONFIG.name}.",
-            suffix=".tmp",
-            delete=False,
+                mode="w",
+                encoding="utf-8",
+                dir=CONFIG.parent,
+                prefix=f".{CONFIG.name}.",
+                suffix=".tmp",
+                delete=False,
         ) as stream:
             temporary = Path(stream.name)
             stream.write(text)

@@ -12,16 +12,16 @@ logger = logging.getLogger("realtime_cv.features")
 
 
 def face_appearance(
-    frame: np.ndarray,
-    bbox: Any,
+        frame: np.ndarray,
+        bbox: Any,
 ) -> list[float] | None:
     x1, y1, x2, y2 = map(int, bbox)
 
     height, width = frame.shape[:2]
 
     crop = frame[
-        max(0, y1) : min(height, y2),
-        max(0, x1) : min(width, x2),
+        max(0, y1): min(height, y2),
+        max(0, x1): min(width, x2),
     ]
 
     if crop.size == 0:
@@ -59,7 +59,7 @@ class OptionalFeatures:
         features = getattr(config, "features", config)
 
         self.gesture_map: dict[str, Any] = (
-            getattr(features, "hand_gesture_map", {}) or {}
+                getattr(features, "hand_gesture_map", {}) or {}
         )
 
         if getattr(features, "emotion_tracking", False):
@@ -118,9 +118,9 @@ class OptionalFeatures:
             )
 
     def annotate_emotions(
-        self,
-        frame: np.ndarray,
-        detections: list[dict[str, Any]],
+            self,
+            frame: np.ndarray,
+            detections: list[dict[str, Any]],
     ) -> None:
         if self.emotion is None:
             return
@@ -148,8 +148,8 @@ class OptionalFeatures:
                 height, width = frame.shape[:2]
 
                 crop = frame[
-                    max(0, y1) : min(height, y2),
-                    max(0, x1) : min(width, x2),
+                    max(0, y1): min(height, y2),
+                    max(0, x1): min(width, x2),
                 ]
 
                 if crop.size == 0:
@@ -185,8 +185,8 @@ class OptionalFeatures:
                 )
 
     def detect_hands(
-        self,
-        frame: np.ndarray,
+            self,
+            frame: np.ndarray,
     ) -> list[dict[str, Any]]:
         if self.hands is None:
             return []
@@ -208,8 +208,8 @@ class OptionalFeatures:
             output: list[dict[str, Any]] = []
 
             for landmarks, handedness in zip(
-                multi_hand_landmarks,
-                multi_handedness,
+                    multi_hand_landmarks,
+                    multi_handedness,
             ):
                 if not landmarks.landmark:
                     continue

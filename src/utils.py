@@ -28,10 +28,10 @@ class _PrettyFormatter(logging.Formatter):
     _DIM = "\033[2m"
 
     def __init__(
-        self,
-        color: bool = True,
-        verbose: bool = False,
-        max_width: int | None = None,
+            self,
+            color: bool = True,
+            verbose: bool = False,
+            max_width: int | None = None,
     ):
         self.color = color
         self.verbose = verbose
@@ -112,10 +112,10 @@ class _PrettyFormatter(logging.Formatter):
 
 
 def setup_logging(
-    level: str = "INFO",
-    logfile: _Opt[str] = None,
-    color: bool = True,
-    verbose: bool = False,
+        level: str = "INFO",
+        logfile: _Opt[str] = None,
+        color: bool = True,
+        verbose: bool = False,
 ) -> None:
     """Configure colorful console logs and plain, searchable file logs."""
     try:
@@ -161,15 +161,15 @@ def current_milli() -> int:
 
 
 def bbox_center(
-    bbox: Tuple[float, float, float, float],
+        bbox: Tuple[float, float, float, float],
 ) -> Tuple[float, float]:
     x1, y1, x2, y2 = bbox
     return (x1 + x2) / 2.0, (y1 + y2) / 2.0
 
 
 def iou(
-    boxA: Tuple[float, float, float, float],
-    boxB: Tuple[float, float, float, float],
+        boxA: Tuple[float, float, float, float],
+        boxB: Tuple[float, float, float, float],
 ) -> float:
     xA = max(boxA[0], boxB[0])
     yA = max(boxA[1], boxB[1])
@@ -190,7 +190,7 @@ def clamp(v, lo, hi):
 
 
 def normalize_point(
-    x: float, y: float, width: int, height: int
+        x: float, y: float, width: int, height: int
 ) -> Tuple[float, float]:
     return x / width, y / height
 

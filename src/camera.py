@@ -15,15 +15,15 @@ class CameraStream:
     """Threaded camera capture that yields frames."""
 
     def __init__(
-        self,
-        source=0,
-        width: int = 1280,
-        height: int = 720,
-        fps: int = 30,
-        simulate: bool = False,
-        sim_video: str = "",
-        inject_fake_face: bool = False,
-        backend_preference: Optional[list] = None,
+            self,
+            source=0,
+            width: int = 1280,
+            height: int = 720,
+            fps: int = 30,
+            simulate: bool = False,
+            sim_video: str = "",
+            inject_fake_face: bool = False,
+            backend_preference: Optional[list] = None,
     ):
         self.source = source
         self.width = width

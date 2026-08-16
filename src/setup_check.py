@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 import importlib
+import logging
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -117,9 +117,9 @@ def check_runtime_setup(config: Any) -> None:
             package,
         )
     if (
-        features
-        and getattr(features, "emotion_tracking", False)
-        and "fer" not in missing_optional
+            features
+            and getattr(features, "emotion_tracking", False)
+            and "fer" not in missing_optional
     ):
         error = _feature_import_error("emotion")
         if error:
@@ -127,9 +127,9 @@ def check_runtime_setup(config: Any) -> None:
                 "Emotion tracking backend is unavailable: %s", error
             )
     if (
-        features
-        and getattr(features, "hand_tracking", False)
-        and "mediapipe" not in missing_optional
+            features
+            and getattr(features, "hand_tracking", False)
+            and "mediapipe" not in missing_optional
     ):
         error = _feature_import_error("hands")
         if error:

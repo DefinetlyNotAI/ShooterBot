@@ -53,17 +53,17 @@ class Track:
 
 class Tracker:
     def __init__(
-        self,
-        max_lost: int = 30,
-        iou_threshold: float = 0.3,
-        track_only: List[str | int] | None = None,
-        use_kalman: bool = True,
-        min_hits: int = 1,
-        max_age: int = 30,
-        class_priority: List[str] | None = None,
-        remember_faces: bool = False,
-        face_memory_threshold: float = 0.78,
-        face_memory_max_age: int = 300,
+            self,
+            max_lost: int = 30,
+            iou_threshold: float = 0.3,
+            track_only: List[str | int] | None = None,
+            use_kalman: bool = True,
+            min_hits: int = 1,
+            max_age: int = 30,
+            class_priority: List[str] | None = None,
+            remember_faces: bool = False,
+            face_memory_threshold: float = 0.78,
+            face_memory_max_age: int = 300,
     ):
         self.max_lost = max_lost
         self.iou_threshold = iou_threshold
@@ -127,7 +127,7 @@ class Tracker:
         )
 
     def select_primary_track(
-        self, tracks: List[Track], preferred_id: int | None = None
+            self, tracks: List[Track], preferred_id: int | None = None
     ) -> Optional[Track]:
         confirmed_tracks = [track for track in tracks if track.confirmed]
         if not confirmed_tracks:
@@ -164,8 +164,8 @@ class Tracker:
 
     @staticmethod
     def _appearance_similarity(
-        a: Optional[List[float]],
-        b: Optional[List[float]],
+            a: Optional[List[float]],
+            b: Optional[List[float]],
     ) -> float:
         if not a or not b or len(a) != len(b):
             return -1.0
@@ -176,9 +176,9 @@ class Tracker:
 
     def _remember_track(self, track: Track, timestamp: float) -> None:
         if (
-            self.remember_faces
-            and track.appearance
-            and self._class_name(track) == ""
+                self.remember_faces
+                and track.appearance
+                and self._class_name(track) == ""
         ):
             self._face_gallery[track.id] = (track.appearance, timestamp)
 
@@ -188,9 +188,9 @@ class Tracker:
             self._face_gallery[track.id] = (track.appearance, timestamp)
 
     def _revive_face(
-        self,
-        detection: Detection,
-        timestamp: float,
+            self,
+            detection: Detection,
+            timestamp: float,
     ) -> Optional[Track]:
         appearance = detection.get("appearance")
 
@@ -259,9 +259,9 @@ class Tracker:
         ]
 
     def update(
-        self,
-        detections: List[Detection],
-        timestamp: float,
+            self,
+            detections: List[Detection],
+            timestamp: float,
     ) -> List[Track]:
         # Only consider detections that should be tracked for association, but keep all in input for visualization
         dets = [d for d in detections if self._should_track(d)]
@@ -305,9 +305,9 @@ class Tracker:
             row_ind, col_ind = linear_sum_assignment(cost)
             for r, c in zip(row_ind, col_ind):
                 if (
-                    r < n_tr
-                    and c < n_det
-                    and cost[r, c] <= (1.0 - self.iou_threshold)
+                        r < n_tr
+                        and c < n_det
+                        and cost[r, c] <= (1.0 - self.iou_threshold)
                 ):
                     matches.append((r, c))
         else:

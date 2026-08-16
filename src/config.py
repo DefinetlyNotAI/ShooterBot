@@ -171,7 +171,7 @@ MODEL_DIR = Path("models")
 
 
 def normalize_model_path(
-    models: Optional[Union[str, List[str]]],
+        models: Optional[Union[str, List[str]]],
 ) -> Optional[List[str]]:
     """
     Ensures all inference models are inside models/.
@@ -261,13 +261,13 @@ def load_config(path: str) -> AppConfig:
     raw_tracking = raw.get("tracking", {}) or {}
 
     if (
-        "class_priority" not in raw_inference
-        and "class_priority" in raw_tracking
+            "class_priority" not in raw_inference
+            and "class_priority" in raw_tracking
     ):
         cfg.inference.class_priority = list(cfg.tracking.class_priority)
     elif (
-        "class_priority" not in raw_tracking
-        and "class_priority" in raw_inference
+            "class_priority" not in raw_tracking
+            and "class_priority" in raw_inference
     ):
         cfg.tracking.class_priority = list(cfg.inference.class_priority)
 
