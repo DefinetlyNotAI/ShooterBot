@@ -82,10 +82,10 @@ def main() -> None:
                 f"  {item['name']}: {item['version']} -> {item['latest_version']}"
             )
     for item in sorted(accelerated, key=lambda value: str(value["name"]).lower()):
-        print.warning(
-            f"  {item['name']}: {item['version']} is an accelerated build; "
-            "PyPI's reported version is not a compatible upgrade target. "
-            "Use the matching PyTorch CUDA wheel index and compatibility matrix."
+        print.info(
+            f"  {item['name']}: {item['version']} is an accelerated library; "
+            "the script cannot check its version.\n  Please manually check "
+            "the matching PyTorch CUDA wheel index and compatibility matrix."
         )
     print("No packages were changed")
 

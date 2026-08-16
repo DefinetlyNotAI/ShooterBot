@@ -38,6 +38,9 @@ class _PrettyFormatter(logging.Formatter):
         self.verbose = verbose
         self.max_width = max_width
         self.project_root = Path(__file__).resolve().parents[1]
+        script_dir = self.project_root / "src" / "scripts"
+        script_names = [path.stem for path in script_dir.glob("*.py")]
+        self.name_width = max(14, *(len(name) for name in script_names))
         super().__init__()
 
     @staticmethod
@@ -88,7 +91,10 @@ class _PrettyFormatter(logging.Formatter):
         message = self._relative_paths(record.getMessage())
         if record.exc_info:
             message = f"{message}\n{self.formatException(record.exc_info)}"
-        prefix = f"{timestamp:>12} | {level:<8} | {name:<14}{location} | "
+        prefix = (
+            f"{timestamp:>12} | {level:<8} | "
+            f"{name:<{self.name_width}}{location} | "
+        )
         lines = self._wrap_message(message, prefix)
         line = "\n".join(lines)
         if not self.color:
@@ -96,7 +102,7 @@ class _PrettyFormatter(logging.Formatter):
         colored_prefix = (
             f"{self._DIM}{timestamp:>12}{self._RESET} | "
             f"{self._COLORS.get(record.levelno, self._RESET)}{level:<8}{self._RESET} | "
-            f"{name:<14}{location} | "
+            f"{name:<{self.name_width}}{location} | "
         )
         plain_prefix_len = len(prefix)
         colored_lines = []

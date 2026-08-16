@@ -43,6 +43,7 @@ class ScriptSpec:
     required_files: tuple[str, ...] = ()
     config_required: bool = True
     cuda_required: bool = False
+    runnable: bool = True
 
 
 SCRIPTS = (
@@ -97,21 +98,21 @@ SCRIPTS = (
     ),
     ScriptSpec(
         "simulation_image",
-        "Save Simulation Output",
+        "Save Annotated Simulation",
         "src.scripts.run_sim_save",
         "Create an annotated synthetic image under files/.",
         packages=("cv2", "numpy", "yaml", "ultralytics"),
     ),
     ScriptSpec(
         "annotated_frame",
-        "Save Annotated Frame",
+        "Save Annotated Debug Frame",
         "src.scripts.save_annotated_frame",
         "Create an annotated simulation image using its debug configuration.",
         packages=("cv2", "numpy", "yaml", "ultralytics"),
     ),
     ScriptSpec(
         "frame",
-        "Test One Frame",
+        "Run One-Frame Detector Test",
         "src.scripts.test_frame",
         "Use one webcam frame when available, otherwise a synthetic frame.",
         packages=("cv2", "numpy", "yaml", "ultralytics"),
@@ -141,6 +142,22 @@ SCRIPTS = (
         models=("yolov8n.pt",),
         config_required=False,
         cuda_required=True,
+    ),
+    ScriptSpec(
+        "paths_support",
+        "Script Paths Support Module",
+        "src.scripts.paths",
+        "Internal shared path helper; not a standalone diagnostic.",
+        config_required=False,
+        runnable=False,
+    ),
+    ScriptSpec(
+        "runtime_support",
+        "Script Logging Support Module",
+        "src.scripts.runtime",
+        "Internal logging helper; not a standalone diagnostic.",
+        config_required=False,
+        runnable=False,
     ),
 )
 
@@ -190,6 +207,8 @@ def script_issues(
 ) -> list[str]:
     """Return actionable reasons that prevent a script from running."""
     issues: list[str] = []
+    if not spec.runnable:
+        issues.append("internal support module")
     missing_packages = available_packages(spec.packages)
     if missing_packages:
         issues.append("missing packages: " + ", ".join(missing_packages))
