@@ -20,18 +20,24 @@ model, opening a camera, or creating output.
 | Console action | Module | Purpose |
 | --- | --- | --- |
 | Validate Configuration | `src.scripts.check_config` | Parses the active YAML configuration without opening models or cameras. |
-| Check External Data Sources | `src.scripts.check_data_sources` | Checks source reachability plus HTTPS and redirect trust boundaries. It cannot prove model integrity without publisher SHA-256 pins. |
+| Check External Data Sources | `src.scripts.check_data_sources` | Checks source reachability plus HTTPS and redirect trust boundaries, and reports SHA-256 pin coverage for model downloads. |
 | Check Package Updates | `src.scripts.check_package_updates` | Reports available project dependency updates without installing anything. |
 | Runtime Report | `src.scripts.runtime_report` | Reports Python, package, config, and model readiness without loading models. |
 | Inspect Detectors | `src.scripts.check_detectors` | Loads configured detectors and prints metadata. |
 | Print Loaded Models | `src.scripts.print_models` | Lists configured models after loading them. |
 | Run Simulation Inference | `src.scripts.sim_infer` | Runs the configured detector stack against a synthetic frame. |
-| Save Simulation Output | `src.scripts.run_sim_save` | Saves an annotated synthetic image. |
-| Save Annotated Frame | `src.scripts.save_annotated_frame` | Saves an annotated simulation image using `configs/default.yaml`. |
-| Test One Frame | `src.scripts.test_frame` | Uses one webcam frame when available, otherwise a synthetic frame. |
+| Save Annotated Simulation | `src.scripts.run_sim_save` | Saves an annotated synthetic image. |
+| Save Annotated Debug Frame | `src.scripts.save_annotated_frame` | Saves an annotated simulation image using `configs/default.yaml`. |
+| Run One-Frame Detector Test | `src.scripts.test_frame` | Uses one webcam frame when available, otherwise a synthetic frame. |
 | Camera Inference Smoke Test | `src.scripts.test_inference` | Runs installed models against one webcam frame; uses a synthetic frame if no webcam is available. |
 | Benchmark Configured Inference | `src.scripts.benchmark` | Measures configured detector throughput. Use `--synthetic` when running directly without a camera. |
-| CUDA YOLO Benchmark | `src.scripts.test_yolo` | Measures YOLO throughput with CUDA and a webcam. Disabled without CUDA or `models/yolov8n.pt`. |
+| CUDA YOLO Benchmark | `src.scripts.test_yolo` | Benchmarks every local `models/*.pt` file with CUDA and a webcam. Disabled without CUDA or local models. |
+| Generate GitHub Support Report | `src.scripts.support_report` | Writes a sensitive diagnostic JSON report under `logs/`; review and redact it before upload. |
+
+**Run All Ready Scripts** runs each available diagnostic in sequence, skips
+disabled entries, and shows a final success/failure summary. It always skips
+the support report because that report is intended to be generated manually
+when filing an issue.
 
 Scripts can also be run directly as modules, for example:
 
@@ -63,3 +69,11 @@ stderr by libraries such as TensorFlow Lite are routed through the
 
 Set `NIRT_CAPTURE_NATIVE_STDERR=0` before starting the application only if a
 native debugging tool requires direct ownership of stderr.
+
+## Issue reports
+
+Use **Generate GitHub Support Report** before opening an issue when practical.
+It gathers system, package, GPU, repository, configuration, and recent-log
+context, so it may contain sensitive information. Inspect and redact the file
+before attaching it. GitHub issue forms and the triage workflow label bugs by
+core runtime, installer/configuration, or scripts, and post a compact summary.

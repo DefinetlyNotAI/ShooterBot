@@ -24,7 +24,10 @@ Production-ready, modular real-time computer vision framework for robotics and a
      python -m src.cli.installer
      ```
    
-   The installer opens an action menu for Health Check, Install, Clean Install, Basic Config, and Advanced Config. It detects NVIDIA hardware and offers CUDA-enabled PyTorch. Select Health Check to inspect the current setup without changing anything.
+   The installer opens an action menu for Health Check, Install, Wipe and
+   Install, Basic Config, and Advanced Config. It detects NVIDIA hardware and
+   offers CUDA-enabled PyTorch. Select Health Check to inspect the current setup
+   without changing anything.
 
 3. Edit `configs/default.yaml` as needed.
 
@@ -42,7 +45,7 @@ Production-ready, modular real-time computer vision framework for robotics and a
 - Generic Arduino serial communication layer (simulation mode)
 - Modular architecture: camera, inference, tracking, visualization, config, logging, serial
 
-See [docs/installer.md](docs/Installer.md) for setup, dependency, model, and troubleshooting details.
+See [docs/Installer.md](docs/Installer.md) for setup, dependency, model, and troubleshooting details.
 Use [docs/Scripts.md](docs/Scripts.md) for the diagnostic Scripts Console and utility-script reference.
 
 ### License

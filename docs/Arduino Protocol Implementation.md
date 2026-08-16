@@ -1,7 +1,8 @@
 # Arduino Protocol
 
-This project does not include Arduino source code, but the Python side already defines the serial contract the firmware
-should follow.
+The repository includes an example Arduino implementation at
+`arduino/servo_controller.ino`. The Python side defines the serial contract
+that compatible firmware must follow.
 
 ## What The Arduino Should Do
 

@@ -59,7 +59,10 @@ The catalog includes:
 - `models/yolov8m.pt` as an optional higher-quality model.
 - `models/yolo26n.pt` as an optional lightweight general detector.
 
-The installer downloads publicly available catalog entries using temporary files, verifies that the download is non-empty, and atomically moves completed files into `models/`. `yolo26n.pt` is available from the Ultralytics assets release and can be downloaded by selecting it. Missing local model files are reported by the Health Check and runtime setup check.
+The installer downloads publicly available catalog entries using temporary files,
+checks size/completeness, verifies the configured SHA-256 pin, and atomically
+moves only verified files into `models/`. Missing local model files are
+reported by the Health Check and runtime setup check.
 
 If multiple face models are installed, the installer requires one face model to be selected. If multiple general models are installed, it requires their priority order. Choices can be written back to the configuration; otherwise an existing configuration order remains authoritative.
 

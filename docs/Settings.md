@@ -75,15 +75,12 @@ This project loads YAML into typed dataclasses in `src/config.py`. Unknown keys 
 
 ## Logging
 
-- `logging.level` controls the console threshold and, by default, the log-file
-  threshold.
-- `logging.verbose: true` keeps the console at `logging.level`, but records
-  DEBUG entries and source locations in the log file.
-
-- `logging.level` - log level such as `INFO` or `DEBUG`.
+- `logging.level` - console log level such as `INFO` or `DEBUG`; it is also
+  the log-file level unless verbose logging is enabled.
 - `logging.file` - runtime log file path; defaults to `logs/nirt_shooterbot.log` and is always kept under the project log folder unless an explicit path is supplied.
 - `logging.color` - enables colored console levels when output goes to a terminal; file logs remain plain text.
-- `logging.verbose` - enables DEBUG-level output and adds function/line context to console messages.
+- `logging.verbose` - keeps console output at `logging.level`, while recording
+  DEBUG entries and source locations in the file log.
 
 ## Debug
 
@@ -95,6 +92,10 @@ This project loads YAML into typed dataclasses in `src/config.py`. Unknown keys 
 ## Configuration behavior
 
 - Unknown YAML keys are ignored; a setting must exist in `src/config.py` or be explicitly read by runtime code.
+- The runtime `--config` argument is a safe selector: use `default.yaml` or
+  `configs/default.yaml`. The selected `.yaml`/`.yml` file must already exist
+  directly under the project `configs/` directory; absolute and traversal paths
+  are rejected.
 - Relative model paths are resolved under `models/`; absolute paths are supported.
 - When `inference.class_priority` is not provided, the tracking priority list is used for inference overlap pruning.
 - Face memory is process-local and is discarded when the application exits.

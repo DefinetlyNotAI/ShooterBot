@@ -15,7 +15,9 @@ This project is a modular real-time computer vision pipeline. The main runtime e
 
 - `src/cli/run.py` installs bootstrap logging before heavy imports, then starts the application, applies CLI overrides, opens the window, and drives the main loop.
 - `src/cli/scripts.py` provides the interactive, capability-aware launcher for `src/scripts/` diagnostics.
-- `src/config.py` loads YAML config into dataclasses and normalizes model paths under `models/`.
+- `src/config.py` selects YAML configuration from the trusted `configs/`
+  directory, loads it into dataclasses, and normalizes model paths under
+  `models/`.
 - `src/camera.py` handles real cameras, video files, and synthetic simulation frames.
 - `src/inference.py` wraps Ultralytics YOLO, optional face detection, and detection filtering.
 - `src/tracker.py` keeps persistent track IDs and a simple velocity estimate.
