@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass, field, fields
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 import yaml
 
+T = TypeVar("T")
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -183,12 +184,16 @@ def normalize_model_path(
     - "auto"
     """
 
-    if not models:
-        return models
+    if models is None:
+        return None
 
-    # Backwards compatibility: allow single string
     if isinstance(models, str):
+        if not models:
+            return None
         models = [models]
+
+    if not models:
+        return []
 
     normalized = []
 
@@ -237,12 +242,23 @@ def load_config(path: str) -> AppConfig:
     with open(p, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
 
-    def merge(cls, data):
+    def merge(
+            cls: type[T],
+            data: Optional[Mapping[str, Any]],
+    ) -> T:
         if data is None:
             return cls()
 
-        fields = {i.name for i in cls.__dataclass_fields__.values()}
-        filtered = {k: v for k, v in data.items() if k in fields}
+        valid_fields = {
+            item.name
+            for item in fields(cast(Any, cls))
+        }
+
+        filtered = {
+            key: value
+            for key, value in data.items()
+            if key in valid_fields
+        }
 
         return cls(**filtered)
 
