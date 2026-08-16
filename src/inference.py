@@ -354,6 +354,10 @@ class InferenceWorker:
         except Exception:
             pass
 
+    def thread_is_alive(self) -> bool:
+        """Return whether the inference worker thread is currently alive."""
+        return self._thread.is_alive()
+
     def submit(self, camera_idx: int, frame: Any, timestamp: float) -> None:
         try:
             self._queue.put_nowait((camera_idx, frame.copy(), timestamp))

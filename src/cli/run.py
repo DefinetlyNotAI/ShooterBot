@@ -5,13 +5,14 @@ from __future__ import annotations
 # ensure package imports resolve when running script directly
 import os
 import sys
+from pathlib import Path
 from typing import Dict, List, Any
 
 from src.noise_control import configure_library_noise
 
 configure_library_noise()
 
-_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+_repo_root = str(Path(__file__).resolve().parents[2])
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
@@ -47,11 +48,11 @@ def main():
         help="Path to YAML config",
     )
     args = parser.parse_args()
-    config_path = os.path.abspath(args.config)
+    config_path = str(Path(args.config).resolve())
     if not os.path.isfile(config_path):
         print(
-            "Configuration was not found: " + config_path + "\n"
-                                                            "Run the installer first: python -m src.cli.installer"
+            f"Configuration was not found: {config_path}\n"
+            "Run the installer first: python -m src.cli.installer"
         )
         raise SystemExit(2)
     cfg = load_config(config_path)
@@ -159,7 +160,7 @@ def main():
     # ensure inference worker remains alive; restart if thread died
     def _ensure_inf_worker():
         try:
-            if not inf_worker._thread.is_alive():
+            if not inf_worker.thread_is_alive():
                 inference_logger = __import__("logging").getLogger(
                     "realtime_cv.inference"
                 )
@@ -172,25 +173,27 @@ def main():
             pass
 
     # Shared event state: serial callbacks run on the serial reader thread.
-    serial_center = {"nc": None}
+    serial_center: dict[str, tuple[float, float] | None] = {
+        "nc": None
+    }
     shot_state = {"requested": False, "target_id": None}
     import threading
 
     shot_lock = threading.Lock()
 
-    def _request_shot(target_id=None):
+    def _request_shot(shot_target_id=None):
         with shot_lock:
             shot_state["requested"] = True
-            shot_state["target_id"] = target_id
+            shot_state["target_id"] = shot_target_id
 
     def _consume_shot():
         with shot_lock:
             if not shot_state["requested"]:
                 return None, False
-            target_id = shot_state["target_id"]
+            shot_target_id = shot_state["target_id"]
             shot_state["requested"] = False
             shot_state["target_id"] = None
-            return target_id, True
+            return shot_target_id, True
 
     def _on_receive(data: bytes):
         try:
@@ -218,8 +221,20 @@ def main():
                     and isinstance(payload.get("nc"), list)
                     and len(payload.get("nc")) == 2
             ):
-                nc = payload.get("nc")
-                serial_center["nc"] = (float(nc[0]), float(nc[1]))
+                nc_payload = payload.get("nc")
+                if isinstance(nc_payload, list) and len(nc_payload) == 2:
+                    serial_center["nc"] = (
+                        float(nc_payload[0]),
+                        float(nc_payload[1]),
+                    )
+                elif "x" in payload and "y" in payload:
+                    try:
+                        serial_center["nc"] = (
+                            float(payload["x"]),
+                            float(payload["y"]),
+                        )
+                    except (TypeError, ValueError):
+                        pass
             elif "x" in payload and "y" in payload:
                 try:
                     serial_center["nc"] = (
@@ -237,14 +252,14 @@ def main():
     cv2.namedWindow("realtime-cv", cv2.WINDOW_NORMAL)
     latest_click_tracks = []
 
-    def _on_mouse(event, x, y, flags, param):
+    def _on_mouse(event, x, y, _flags, _param):
         if event != cv2.EVENT_LBUTTONDOWN:
             return
         # In debug mode a click inside any displayed target is the shot signal.
         if not cfg.debug.enabled:
             return
-        for track_id, bbox in reversed(latest_click_tracks):
-            x1, y1, x2, y2 = map(int, bbox)
+        for track_id, _bbox in reversed(latest_click_tracks):
+            x1, y1, x2, y2 = map(int, _bbox)
             if x1 <= x <= x2 and y1 <= y <= y2:
                 _request_shot(track_id)
                 return
@@ -252,10 +267,8 @@ def main():
     cv2.setMouseCallback("realtime-cv", _on_mouse)
     last_time = time.time()
     infer_time_ms = 0.0
-    fps = 0.0
     last_results: dict[int, List[Dict[str, Any]]] = {}
     smooth_pos = None
-    primary_id = None
     try:
         while True:
             # ensure inference worker running
@@ -269,6 +282,8 @@ def main():
                 continue
             for idx, ts, frame in frames:
                 fresh_result = False
+                res = None
+
                 try:
                     loop_logger = __import__("logging").getLogger(
                         "realtime_cv.loop"
@@ -295,7 +310,7 @@ def main():
                     else:
                         dets = last_results.get(idx, [])
                         timestamp = time.time()
-                except Exception as e:
+                except Exception:
                     import traceback
 
                     traceback.print_exc()
@@ -304,18 +319,17 @@ def main():
 
                 if fresh_result:
                     for detection in dets:
-                        if (
-                                str(
-                                    detection.get(
-                                        "class_name", detection.get("label", "")
-                                    )
-                                ).lower()
-                                == "face"
-                        ):
+                        class_name = detection.get("class_name")
+                        if not isinstance(class_name, str):
+                            class_name = detection.get("label")
+
+                        if isinstance(class_name, str) and class_name.lower() == "face":
                             detection["appearance"] = face_appearance(
                                 frame, detection.get("bbox")
                             )
+
                     optional_features.annotate_emotions(frame, dets)
+
                 hand_results = optional_features.detect_hands(frame)
 
                 # Detailed detection dumps are opt-in; normal operation stays quiet.
@@ -367,18 +381,17 @@ def main():
                 )
                 if primary is not None and primary.lost != 0:
                     primary = None
-                primary_id = primary.id if primary else None
 
                 # visualization: draw ALL detections, but only draw tracked overlay for primary
                 # helper to match a detection to primary by center distance
                 def _is_match(det, tr, thresh_px=40):
                     try:
-                        cx = (det["bbox"][0] + det["bbox"][2]) / 2.0
-                        cy = (det["bbox"][1] + det["bbox"][3]) / 2.0
+                        match_cx = (det["bbox"][0] + det["bbox"][2]) / 2.0
+                        match_cy = (det["bbox"][1] + det["bbox"][3]) / 2.0
                         tcx = (tr.bbox[0] + tr.bbox[2]) / 2.0
                         tcy = (tr.bbox[1] + tr.bbox[3]) / 2.0
                         return (
-                                (cx - tcx) ** 2 + (cy - tcy) ** 2
+                                (match_cx - tcx) ** 2 + (match_cy - tcy) ** 2
                         ) ** 0.5 <= thresh_px
                     except Exception:
                         return False
@@ -393,7 +406,14 @@ def main():
 
                 for d in dets:
                     bbox = d["bbox"]
-                    label = str(d.get("class_name", d.get("class_id", "")))
+                    class_name = d.get("class_name")
+
+                    if isinstance(class_name, str):
+                        label = class_name
+                    else:
+                        class_id = d.get("class_id")
+                        label = str(class_id) if isinstance(class_id, (int, float)) else ""
+
                     if d.get("emotion"):
                         label = f"{label} | {d['emotion']}"
                     # color selection depends on mode
@@ -460,7 +480,6 @@ def main():
                         draw_track(frame, track, color=(120, 120, 120))
 
                 # draw primary track with stronger UI and update smooth_pos
-                tracked_info = None
                 if primary:
                     # draw tracked overlay near original bbox
                     # color green if centered (real mode) else cyan
@@ -513,13 +532,16 @@ def main():
                     try:
                         from src.coco import COCO_CLASSES
 
-                        class_name = (
-                            COCO_CLASSES[primary.class_id]
-                            if 0 <= primary.class_id < len(COCO_CLASSES)
-                            else str(primary.class_id)
-                        )
-                    except Exception:
+                        if 0 <= primary.class_id < len(COCO_CLASSES):
+                            name = COCO_CLASSES[primary.class_id]
+                            class_name: str = (
+                                name if isinstance(name, str) else str(primary.class_id)
+                            )
+                        else:
+                            class_name = str(primary.class_id)
+                    except (IndexError, TypeError):
                         class_name = str(primary.class_id)
+
                     tracked_info = {
                         "class_name": class_name,
                         "confidence": primary.confidence,
@@ -604,17 +626,27 @@ def main():
                 # publish simplified telemetry for primary only
                 if primary:
                     try:
+                        from src.coco import COCO_CLASSES
+
+                        if 0 <= primary.class_id < len(COCO_CLASSES):
+                            name = COCO_CLASSES[primary.class_id]
+                            class_name = (
+                                name if isinstance(name, str) else str(primary.class_id)
+                            )
+                        else:
+                            class_name = str(primary.class_id)
+
                         # noinspection DuplicatedCode
                         h, w = frame.shape[:2]
                         cx = (primary.bbox[0] + primary.bbox[2]) / 2.0
                         cy = (primary.bbox[1] + primary.bbox[3]) / 2.0
                         nc = [cx / w, cy / h]
-                        # extrapolate predicted position (lead seconds)
+
                         lead = getattr(cfg.tracking, "extrapolate_secs", 0.2)
                         px = cx + primary.velocity[0] * lead
                         py = cy + primary.velocity[1] * lead
                         pnc = [px / w, py / h]
-                        # send class_name (friendly) instead of id-only string; include predicted center
+
                         serial.send_telemetry(
                             primary.id,
                             class_name,
