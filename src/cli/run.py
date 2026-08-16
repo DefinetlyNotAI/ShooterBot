@@ -14,8 +14,14 @@ _repo_root = str(Path(__file__).resolve().parents[2])
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from src.config import load_config
 from src.utils import setup_logging, logger
+
+# Install the project's formatter before importing libraries that may emit
+# diagnostics during import (OpenCV, NumPy, TensorFlow, or MediaPipe). The
+# config-specific logger is applied later by load_application_config().
+setup_logging()
+
+from src.config import load_config
 from src.camera import CameraManager, CameraStream
 from src.inference import DetectorManager, InferenceWorker
 from src.tracker import Tracker
@@ -39,7 +45,6 @@ import math
 import threading
 import time
 
-from pathlib import Path
 from typing import Any, Dict, List
 
 import cv2
@@ -1309,12 +1314,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_application_config(config_argument: str):
+    logger.info("Application config is loading.")
+
     config_path = Path(
         config_argument
     ).resolve()
 
     if not config_path.is_file():
-        print(
+        logger.critical(
             f"Configuration was not found: {config_path}\n"
             "Run the installer first: python -m src.cli.installer"
         )
@@ -1343,6 +1350,9 @@ def load_application_config(config_argument: str):
 
 
 def main() -> None:
+    # TODO: Separate the UI element from installer to src/ui.py, then use a banner here with title "ShooterBot - NIRT"
+    logger.info("Starting ShooterBot setup phase")
+
     args = parse_args()
     cfg = load_application_config(args.config)
 

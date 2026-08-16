@@ -87,6 +87,8 @@ def _configured_model_paths(config: Any) -> list[Path]:
 
 def check_runtime_setup(config: Any) -> None:
     """Fail fast for mandatory packages and warn about recoverable setup issues."""
+    logger.info("Runtime setup check starting.")
+
     missing = _missing_packages(REQUIRED_PACKAGES)
     if missing:
         packages = " ".join(missing)
