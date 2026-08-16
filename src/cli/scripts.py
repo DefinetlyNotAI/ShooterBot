@@ -302,18 +302,37 @@ def run_script(ui: UI, spec: ScriptSpec) -> int:
 
 
 def run_all_scripts(ui: UI) -> int:
-    """Run eligible scripts one by one and keep going after individual failures."""
-    failures = 0
+    """Run eligible scripts and give a clear final outcome summary."""
+    succeeded: list[str] = []
+    failures: list[tuple[str, int]] = []
+    skipped = 0
     for spec in SCRIPTS:
         if spec.key == "support_report":
             ui.out("  Skipping Generate GitHub Support Report: run it manually when needed.", "dim")
+            skipped += 1
             continue
         issues = script_issues(spec, wait_for_cuda=True)
         if issues:
             ui.out(f"  Skipping {spec.label}: {'; '.join(issues)}", "yellow")
+            skipped += 1
             continue
-        failures += int(run_script(ui, spec) != 0)
-    return 1 if failures else 0
+        returncode = run_script(ui, spec)
+        if returncode:
+            failures.append((spec.label, returncode))
+        else:
+            succeeded.append(spec.label)
+
+    total = len(succeeded) + len(failures)
+    ui.header("Run All Scripts Summary")
+    ui.out(f"  Succeeded: {len(succeeded)}/{total}", "green" if not failures else "yellow")
+    ui.out(f"  Skipped: {skipped}", "dim")
+    if failures:
+        ui.out("  FAILED", "red")
+        for label, returncode in failures:
+            ui.out(f"    - {label} (exit code {returncode})", "red")
+        return 1
+    ui.out("  SUCCESS: every attempted script completed successfully.", "green")
+    return 0
 
 
 def main() -> int:
