@@ -1376,7 +1376,10 @@ def load_application_config(config_argument: str):
         )
         raise SystemExit(2)
 
-    cfg = load_config(config_path)
+    # ``load_config`` performs the same trusted-directory selection. Pass the
+    # original selector rather than the resolved absolute path so it remains a
+    # valid selector on that second validation pass.
+    cfg = load_config(config_argument)
 
     setup_logging(
         cfg.logging.level,
