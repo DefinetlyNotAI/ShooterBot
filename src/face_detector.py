@@ -60,9 +60,8 @@ class FaceDetector:
                 candidate_pt = candidate + ".pt"
             else:
                 candidate_pt = candidate
-            # search in cwd, cache_dir, and as provided absolute path
+            # Keep model discovery inside the project model/cache directories.
             candidates = [
-                Path(candidate_pt),
                 MODEL_DIR / Path(candidate_pt).name,
                 self.cache_dir / Path(candidate_pt).name,
             ]

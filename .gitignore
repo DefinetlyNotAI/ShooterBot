@@ -9,6 +9,7 @@ __pycache__/
 # Runtime and installer output
 logs/
 *.log
+files/
 .nirt_installer_write_test
 configs/
 
@@ -22,7 +23,6 @@ configs/
 
 # Downloaded model assets (keep model URLs/catalogues documented)
 models/
-src/scripts/models/
 
 # Temporary installer files
 *.part

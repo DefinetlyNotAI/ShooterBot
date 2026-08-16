@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.config import load_config
 from src.inference import DetectorManager
+from src.scripts.paths import files_dir
 from src.visualization import draw_detection
 
 
@@ -95,11 +96,7 @@ def main() -> None:
             confidence=confidence,
         )
 
-    out_dir = ROOT / "files"
-    out_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    out_dir = files_dir()
 
     out_path = out_dir / f"annotated_{int(time.time())}.png"
 

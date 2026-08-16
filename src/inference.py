@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
@@ -106,7 +105,7 @@ class YOLODetector:
         self.cache_dir = (
             Path(cache_dir)
             if cache_dir
-            else Path(tempfile.gettempdir()) / "realtime_cv_models"
+            else ROOT / ".cache" / "realtime_cv_models"
         )
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         # model selection: support 'auto' to pick model based on device
@@ -119,7 +118,7 @@ class YOLODetector:
                 selected_model = "yolov8m.pt"
             else:
                 selected_model = "yolov8n.pt"
-        self.model_name = selected_model
+        self.model_name = resolve_model_path(str(selected_model))
         # If running on CPU, prefer smaller model for realtime; downgrade very large models automatically
         if self.device.startswith("cpu") and self.model_name in (
                 "yolov8x.pt",
@@ -129,7 +128,7 @@ class YOLODetector:
                 "Running on CPU: switching model %s -> yolov8n.pt for better realtime performance",
                 self.model_name,
             )
-            self.model_name = "yolov8n.pt"
+            self.model_name = str(MODEL_DIR / "yolov8n.pt")
         logger.info(
             f"Loading YOLO model {self.model_name} on device {self.device}"
         )
@@ -445,7 +444,7 @@ class DetectorManager:
             )
             discovered = []
             seen_names = {Path(m).name.lower() for m in models_to_load}
-            for search_root in (Path.cwd(), MODEL_DIR):
+            for search_root in (MODEL_DIR,):
                 if not search_root.exists():
                     continue
                 for candidate in sorted(search_root.glob("*.pt")):
@@ -523,11 +522,6 @@ class DetectorManager:
                     alt = repo_root / cand.name
                     if alt.exists():
                         cand = alt
-                    else:
-                        # also try current working directory
-                        cwd_alt = Path.cwd() / cand.name
-                        if cwd_alt.exists():
-                            cand = cwd_alt
                 cand_path = str(cand)
                 cand_name = Path(cand_path).name.lower()
 

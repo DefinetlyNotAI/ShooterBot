@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from ultralytics import YOLO
+from src.scripts.paths import files_dir, model_path
 
 
 def safe_str(value: Any) -> str:
@@ -24,8 +25,8 @@ def safe_str(value: Any) -> str:
 
 def main() -> None:
     model_paths = [
-        ROOT / "models" / "yolov8n.pt",
-        ROOT / "models" / "yolo26n-face.pt",
+        model_path("yolov8n.pt"),
+        model_path("yolo26n-face.pt"),
     ]
 
     loaded: dict[str, YOLO] = {}
@@ -243,12 +244,7 @@ def main() -> None:
                 safe_str(exc),
             )
 
-    out_dir = ROOT / "files"
-
-    out_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    out_dir = files_dir()
 
     out_path = (
             out_dir

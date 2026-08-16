@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.scripts.paths import models_dir
 
 PACKAGES = ("ultralytics", "opencv-python", "PyYAML", "numpy", "pyserial")
 
@@ -22,15 +26,18 @@ def distribution_version(name: str) -> str:
 
 def main() -> None:
     config_path = ROOT / "configs" / "default.yaml"
-    models_dir = ROOT / "models"
+    installed_models_dir = models_dir()
     print("NIRT ShooterRobot runtime report")
     print("Project root:", ROOT)
     print("Python:", sys.version.split()[0])
     print("Platform:", platform.platform())
     print("Configuration:", "ready" if config_path.is_file() else "missing")
-    print("Models directory:", "ready" if models_dir.is_dir() else "missing")
-    if models_dir.is_dir():
-        models = sorted(path.name for path in models_dir.glob("*.pt"))
+    print(
+        "Models directory:",
+        "ready" if installed_models_dir.is_dir() else "missing",
+    )
+    if installed_models_dir.is_dir():
+        models = sorted(path.name for path in installed_models_dir.glob("*.pt"))
         print("Models:", ", ".join(models) if models else "none found")
     print("Packages:")
     for package in PACKAGES:

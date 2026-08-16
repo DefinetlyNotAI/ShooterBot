@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
 import yaml
 
 T = TypeVar("T")
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 
@@ -168,7 +168,7 @@ class AppConfig:
     debug: DebugConfig = field(default_factory=DebugConfig)
 
 
-MODEL_DIR = Path("models")
+MODEL_DIR = ROOT / "models"
 
 
 def normalize_model_path(
@@ -207,7 +207,7 @@ def normalize_model_path(
         if path.is_absolute():
             normalized.append(str(path))
         elif path.parts and path.parts[0] == MODEL_DIR.name:
-            normalized.append(str(path))
+            normalized.append(str(ROOT / path))
         else:
             normalized.append(str(MODEL_DIR / path))
 
@@ -228,7 +228,7 @@ def normalize_single_model_path(model: Optional[str]) -> Optional[str]:
         return str(path)
 
     if path.parts and path.parts[0] == MODEL_DIR.name:
-        return str(path)
+        return str(ROOT / path)
 
     return str(MODEL_DIR / path)
 

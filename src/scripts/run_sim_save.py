@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT))
 from src.config import load_config
 from src.inference import DetectorManager
 from src.serial_comm import SerialInterface
+from src.scripts.paths import files_dir
 from src.tracker import Tracker
 from src.visualization import (
     draw_center_ui,
@@ -54,8 +55,7 @@ def main() -> None:
     cfg.debug.simulate_camera = True
     cfg.debug.inject_fake_face = True
 
-    out_dir = ROOT / "files"
-    out_dir.mkdir(exist_ok=True)
+    out_dir = files_dir()
 
     img_path = out_dir / f"sim_output_{int(time.time())}.png"
 

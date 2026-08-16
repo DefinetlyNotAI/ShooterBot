@@ -18,7 +18,9 @@ from ultralytics import YOLO
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-MODEL_PATH = ROOT / "models" / "yolov8n.pt"
+from src.scripts.paths import model_path
+
+MODEL_PATH = model_path("yolov8n.pt")
 
 IMG_SIZE = 640
 WARMUP_RUNS = 10
