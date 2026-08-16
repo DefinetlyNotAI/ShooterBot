@@ -24,7 +24,13 @@ def safe_str(value: Any, default: str = "obj") -> str:
 
 
 def main() -> None:
-    config_path = ROOT / "configs" / "debug" / "sim_debug.yaml"
+    config_path = ROOT / "configs" / "default.yaml"
+
+    if not config_path.is_file():
+        raise FileNotFoundError(
+            "Configuration is missing. Run the installer first: "
+            "python -m src.cli.installer"
+        )
 
     cfg = load_config(str(config_path))
 

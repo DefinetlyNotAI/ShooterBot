@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import cv2
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -94,6 +95,11 @@ def main():
         default=200,
         help="Frames count to benchmark",
     )
+    parser.add_argument(
+        "--synthetic",
+        action="store_true",
+        help="Benchmark a generated frame instead of opening a camera.",
+    )
 
     args = parser.parse_args()
 
@@ -153,10 +159,26 @@ def main():
             f"model={model_name}"
         )
 
-    cap = cv2.VideoCapture(cfg.camera.sources[0])
-
-    if not cap.isOpened():
-        raise RuntimeError("Failed to open camera")
+    cap = None
+    synthetic_frame = None
+    if args.synthetic:
+        synthetic_frame = np.full(
+            (int(cfg.camera.height), int(cfg.camera.width), 3),
+            120,
+            dtype=np.uint8,
+        )
+        print("Using synthetic frame")
+    else:
+        cap = cv2.VideoCapture(cfg.camera.sources[0])
+        if not cap.isOpened():
+            cap.release()
+            cap = None
+            synthetic_frame = np.full(
+                (int(cfg.camera.height), int(cfg.camera.width), 3),
+                120,
+                dtype=np.uint8,
+            )
+            print("Camera unavailable; using synthetic frame")
 
     times: list[float] = []
 
@@ -173,9 +195,13 @@ def main():
 
             for i in range(1, 11):
 
-                ret, frame = cap.read()
+                if cap is None:
+                    frame = synthetic_frame
+                    ret = frame is not None
+                else:
+                    ret, frame = cap.read()
 
-                if not ret:
+                if not ret or frame is None:
                     raise RuntimeError("Failed to capture warmup frame")
 
                 ms = benchmark_frame(dm, frame)
@@ -205,9 +231,13 @@ def main():
 
         while frame_count < args.frames:
 
-            ret, frame = cap.read()
+            if cap is None:
+                frame = synthetic_frame
+                ret = frame is not None
+            else:
+                ret, frame = cap.read()
 
-            if not ret:
+            if not ret or frame is None:
                 break
 
             ms = benchmark_frame(dm, frame)
@@ -220,7 +250,8 @@ def main():
     except KeyboardInterrupt:
         print("\n\nBenchmark interrupted")
     finally:
-        cap.release()
+        if cap is not None:
+            cap.release()
 
     print()
 

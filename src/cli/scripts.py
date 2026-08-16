@@ -42,6 +42,13 @@ class ScriptSpec:
 
 SCRIPTS = (
     ScriptSpec(
+        "runtime_report",
+        "Runtime Report",
+        "src.scripts.runtime_report",
+        "Report configuration, model, Python, and package readiness.",
+        config_required=False,
+    ),
+    ScriptSpec(
         "detectors",
         "Inspect Detectors",
         "src.scripts.check_detectors",
@@ -75,7 +82,6 @@ SCRIPTS = (
         "src.scripts.save_annotated_frame",
         "Create an annotated simulation image using its debug configuration.",
         packages=("cv2", "numpy", "yaml", "ultralytics"),
-        required_files=("configs/debug/sim_debug.yaml",),
     ),
     ScriptSpec(
         "frame",

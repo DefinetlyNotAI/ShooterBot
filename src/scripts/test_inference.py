@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import cv2
+import numpy as np
 from ultralytics.engine.results import Results
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -84,21 +85,18 @@ def main() -> None:
 
     cap = cv2.VideoCapture(0)
 
+    frame: np.ndarray | None = None
     try:
-        if not cap.isOpened():
-            raise RuntimeError("Failed to open camera 0")
-
-        success, captured_frame = cap.read()
-
-        if not success or captured_frame is None:
-            raise RuntimeError(
-                "Failed to read frame from camera"
-            )
-
-        frame = captured_frame
-
+        if cap.isOpened():
+            success, captured_frame = cap.read()
+            if success and captured_frame is not None:
+                frame = captured_frame
     finally:
         cap.release()
+
+    if frame is None:
+        print("Camera unavailable; using a synthetic 1280x720 frame")
+        frame = np.full((720, 1280, 3), 120, dtype=np.uint8)
 
     frame_height, frame_width = frame.shape[:2]
 
