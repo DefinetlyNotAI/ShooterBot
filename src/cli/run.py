@@ -1309,9 +1309,6 @@ class NIRTShooterBotApplication:
 
         except KeyboardInterrupt:
             logger.info("Shutting down")
-            print()
-            print_banner("ShooterBot - By Shahm Najeeb")
-            print()
 
         finally:
             self.shutdown()
@@ -1344,6 +1341,10 @@ class NIRTShooterBotApplication:
 
         cv2.destroyAllWindows()
         logger.info("Runtime shutdown complete")
+
+        print()
+        print_banner("ShooterBot - By Shahm Najeeb")
+        print()
 
 
 def parse_args() -> argparse.Namespace:
@@ -1402,7 +1403,7 @@ def load_application_config(config_argument: str):
     return cfg
 
 
-def main() -> None:
+def main() -> int:
     print()
     print_banner("ShooterBot - NIRT")
     logger.info("Starting ShooterBot setup phase")
@@ -1412,7 +1413,12 @@ def main() -> None:
 
     app = NIRTShooterBotApplication(cfg)
     app.run()
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        logger.warning("Startup interrupted by user; exiting cleanly.")
+        raise SystemExit(130)
