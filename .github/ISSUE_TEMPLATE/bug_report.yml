@@ -1,0 +1,78 @@
+name: Bug report
+description: Report a reproducible NIRT ShooterBot problem.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Before filing, run **Generate GitHub Support Report** from the Scripts console when possible.
+
+        The report may contain device, username, path, configuration, and log information. Review and redact it before attaching it.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Clearly describe the observed behavior and its impact.
+      placeholder: The application closes when...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest reliable sequence of actions and configuration changes.
+      placeholder: |
+        1. Start with...
+        2. Select...
+        3. Observe...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened instead?
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected component
+      options:
+        - Installer/configuration
+        - Scripts console
+        - Camera/inference
+        - Models/downloads
+        - Serial/Arduino
+        - Logging/support report
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste only relevant lines; remove sensitive values, paths, and personal information.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Project commit or version
+      description: Run `git rev-parse --short HEAD` from the project directory when available.
+      placeholder: abc1234
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, GPU/CUDA details, and whether serial hardware is enabled.
+      placeholder: Windows 11, Python 3.11, RTX ..., CUDA ..., simulation mode
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I removed sensitive information before attaching logs or support reports.
+          required: true
