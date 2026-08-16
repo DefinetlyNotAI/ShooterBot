@@ -23,7 +23,7 @@ jobs:
             if (isFeature) {
               labels.push("enhancement");
             } else {
-              if (body.includes("Core runtime (bug:core)")) {
+              if (body.includes("Core runtime / Main script (bug:core)")) {
                 labels.push("bug:core");
               } else if (body.includes("Installer or configuration (bug:installer)")) {
                 labels.push("bug:installer");
