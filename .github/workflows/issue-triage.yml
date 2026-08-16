@@ -1,0 +1,65 @@
+name: Issue triage
+
+on:
+  issues:
+    types: [ opened ]
+
+permissions:
+  issues: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Label and acknowledge the issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || "";
+            const isFeature = issue.title.toLowerCase().startsWith("[feature]");
+            const labels = ["needs triage"];
+
+            if (isFeature) {
+              labels.push("enhancement");
+            } else {
+              if (body.includes("Core runtime (bug:core)")) {
+                labels.push("bug:core");
+              } else if (body.includes("Installer or configuration (bug:installer)")) {
+                labels.push("bug:installer");
+              } else if (body.includes("Scripts console or utility script (bug:scripts)")) {
+                labels.push("bug:scripts");
+              } else {
+                labels.push("invalid");
+              }
+            }
+
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              labels,
+            });
+
+            const section = (heading) => {
+              const matcher = new RegExp(`### ${heading}\\s*\\n([\\s\\S]*?)(?=\\n### |$)`, "i");
+              return (body.match(matcher)?.[1] || "Not provided").trim();
+            };
+            const compact = (value, maximum = 1200) =>
+              value.length > maximum ? `${value.slice(0, maximum)}…` : value;
+            const kind = isFeature ? "feature suggestion" : "bug report";
+            const responseWindow = isFeature ? "within one week" : "within 48 business hours";
+            const summary = isFeature
+              ? [["Problem or use case", section("Problem or use case")], ["Proposed outcome", section("Proposed outcome")], ["Related area", section("Related area")]]
+              : [["Bug type", section("Bug type")], ["What happened?", section("What happened?")], ["Expected behavior", section("Expected behavior")], ["Environment", section("Environment")]];
+            const markdown = summary.map(([title, value]) => `#### ${title}\n${compact(value)}`).join("\n\n");
+            const attachmentNote = /https:\/\/user-images\.githubusercontent\.com|https:\/\/github\.com\/user-attachments\//i.test(body)
+              ? "\n\n> Attached files were detected. They are linked in the issue; please review them for sensitive information."
+              : "";
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: `Thanks for the ${kind}! This issue has been labeled for triage. A maintainer will aim to provide an initial response ${responseWindow}.\n\n## Triage summary\n\n${markdown}${attachmentNote}`,
+            });

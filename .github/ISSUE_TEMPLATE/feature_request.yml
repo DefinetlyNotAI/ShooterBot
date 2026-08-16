@@ -1,0 +1,59 @@
+name: Feature request
+description: Propose a focused improvement for NIRT ShooterBot.
+title: "[Feature]: "
+labels: [ "enhancement", "needs triage" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve NIRT ShooterBot. Please describe the outcome you need, not only a preferred implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation, workflow, or user need would this address?
+      placeholder: It is difficult to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed outcome
+      description: Describe the behavior you would like to see.
+      placeholder: The application should...
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Related area
+      options:
+        - Core runtime
+        - Installer or configuration
+        - Scripts console or utility scripts
+        - Arduino or serial protocol
+        - Documentation
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative approaches have you considered?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include mockups, examples, or technical constraints if helpful. Do not include sensitive information.
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and did not find the same feature request.
+          required: true
+        - label: I understand this request may require design and compatibility review and may be rejected for any reason.
+          required: true
+        - label: (Optional) I am willing to contribute code or documentation for this feature request.
+          required: false

@@ -1,14 +1,14 @@
 name: Bug report
 description: Report a reproducible NIRT ShooterBot problem.
 title: "[Bug]: "
-labels: ["bug", "needs-triage"]
+labels: [ "needs triage" ]
 body:
   - type: markdown
     attributes:
       value: |
         Thank you for reporting a problem. Before filing, run **Generate GitHub Support Report** from the Scripts console when possible.
 
-        The report may contain device, username, path, configuration, and log information. Review and redact it before attaching it.
+        The report may contain device, username, path, configuration, and log information. Review and redact it before attaching it if its sensitive.
   - type: textarea
     id: summary
     attributes:
@@ -49,12 +49,17 @@ body:
         - Other
     validations:
       required: true
-  - type: textarea
-    id: logs
+  - type: dropdown
+    id: bug_area
     attributes:
-      label: Relevant log output
-      description: Paste only relevant lines; remove sensitive values, paths, and personal information.
-      render: text
+      label: Bug type
+      description: Choose the affected area. Maintainers will apply `bug:core`, `bug:installer`, or `bug:scripts` during triage.
+      options:
+        - Core runtime / Main script        (bug:core)
+        - Installer or configuration        (bug:installer)
+        - Scripts console or utility script (bug:scripts)
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
@@ -67,6 +72,12 @@ body:
       label: Environment
       description: OS, Python version, GPU/CUDA details, and whether serial hardware is enabled.
       placeholder: Windows 11, Python 3.11, RTX ..., CUDA ..., simulation mode
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Upload the JSON log created before, and if possible the latest LOG file from the `logs` directory.
+      render: text
   - type: checkboxes
     id: checklist
     attributes:
@@ -74,5 +85,5 @@ body:
       options:
         - label: I searched existing issues and did not find a duplicate.
           required: true
-        - label: I removed sensitive information before attaching logs or support reports.
+        - label: I attached the JSON log and agree that all uploaded files can be viewed by anyone checking this issue.
           required: true
