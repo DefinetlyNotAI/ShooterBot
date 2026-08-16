@@ -513,7 +513,7 @@ class DetectorManager:
         face_candidate = getattr(config.inference, "face_model", None)
 
         # If discovered, and not already loaded, append
-        if face_candidate:
+        if isinstance(face_candidate, str) and face_candidate:
             try:
                 # normalize and resolve candidate path/name to avoid relative path issues
                 cand = Path(resolve_model_path(str(face_candidate)))
@@ -546,7 +546,8 @@ class DetectorManager:
                         # YOLODetector exposes model_name attribute
                         mname = getattr(_obj, "model_name", None)
                         if (
-                                mname
+                                isinstance(mname, str)
+                                and mname
                                 and Path(str(mname)).name.lower() == cand_name
                         ):
                             return True
