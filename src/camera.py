@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from queue import Queue, Empty
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 
 import cv2
 import numpy as np
@@ -41,7 +41,8 @@ class CameraStream:
         self.backend_preference = backend_preference
 
     def start(self) -> None:
-        import logging, platform
+        import logging
+        import platform
 
         logger = logging.getLogger("realtime_cv.camera")
         if self._running:
@@ -55,10 +56,12 @@ class CameraStream:
                 logger.info("Starting synthetic simulation camera")
                 self._cap = None
             self._running = True
-            self._thread = threading.Thread(
-                target=self._capture_loop, daemon=True
+            thread = threading.Thread(
+                target=self._capture_loop,
+                daemon=True,
             )
-            self._thread.start()
+            self._thread = thread
+            thread.start()
             return
 
         # try to open real camera with multiple backends for robustness
@@ -190,11 +193,14 @@ class CameraStream:
             self.simulate = True
             self._cap = None
         self._running = True
-        self._thread = threading.Thread(target=self._capture_loop, daemon=True)
-        self._thread.start()
+        thread = threading.Thread(
+            target=self._capture_loop,
+            daemon=True,
+        )
+        self._thread = thread
+        thread.start()
 
     def _capture_loop(self) -> None:
-        t0 = time.time()
         sim_pos = 0.0
         sim_dir = 1
         while self._running:
@@ -238,7 +244,7 @@ class CameraStream:
                 # drop frame if queue full
                 pass
 
-    def read(self, timeout: float = 0.5) -> Optional[Tuple[float, any]]:
+    def read(self, timeout: float = 0.5) -> Optional[Tuple[float, Any]]:
         try:
             return self._queue.get(timeout=timeout)
         except Empty:
@@ -262,7 +268,7 @@ class CameraManager:
         self.streams.append(stream)
         stream.start()
 
-    def read_all(self) -> List[Tuple[int, float, any]]:
+    def read_all(self) -> List[Tuple[int, float, Any]]:
         out = []
         for idx, s in enumerate(self.streams):
             item = s.read(timeout=0.01)
