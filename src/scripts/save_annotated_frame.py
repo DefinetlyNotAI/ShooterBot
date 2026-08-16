@@ -13,8 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from src.config import load_config
 from src.inference import DetectorManager
-from src.scripts.paths import files_dir
-from src.scripts.runtime import configure_script_output
+from src.scripts._paths import files_dir
+from src.scripts._runtime import configure_script_output
 from src.visualization import draw_detection
 
 print = configure_script_output(__name__)

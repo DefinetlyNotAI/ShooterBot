@@ -13,8 +13,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from ultralytics import YOLO
-from src.scripts.paths import files_dir, model_path
-from src.scripts.runtime import configure_script_output
+from src.scripts._paths import files_dir, model_path
+from src.scripts._runtime import configure_script_output
 
 print = configure_script_output(__name__)
 

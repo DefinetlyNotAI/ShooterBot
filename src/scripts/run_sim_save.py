@@ -15,8 +15,8 @@ sys.path.insert(0, str(ROOT))
 from src.config import load_config
 from src.inference import DetectorManager
 from src.serial_comm import SerialInterface
-from src.scripts.paths import files_dir
-from src.scripts.runtime import configure_script_output
+from src.scripts._paths import files_dir
+from src.scripts._runtime import configure_script_output
 from src.tracker import Tracker
 from src.visualization import (
     draw_center_ui,

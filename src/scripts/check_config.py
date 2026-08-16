@@ -10,7 +10,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.config import load_config
-from src.scripts.runtime import configure_script_output
+from src.scripts._runtime import configure_script_output
 
 print = configure_script_output(__name__)
 

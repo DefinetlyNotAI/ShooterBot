@@ -19,7 +19,7 @@ from src.data_sources import (
     PYTORCH_CUDA_WHEEL_INDEX,
     TRUSTED_DOWNLOAD_HOSTS,
 )
-from src.scripts.runtime import configure_script_output
+from src.scripts._runtime import configure_script_output
 
 print = configure_script_output(__name__)
 

@@ -17,7 +17,7 @@ sys.path.insert(0, str(ROOT))
 
 from src.config import load_config
 from src.inference import DetectorManager
-from src.scripts.runtime import configure_script_output
+from src.scripts._runtime import configure_script_output
 
 print = configure_script_output(__name__)
 
@@ -43,7 +43,7 @@ def print_progress(
     progress: float = current / total
     filled: int = int(width * progress)
 
-    bar = "█" * filled + "░" * (width - filled)
+    bar = "â–ˆ" * filled + "â–‘" * (width - filled)
     fps: float = 1000.0 / ms if ms > 0 else 0.0
 
     print(
