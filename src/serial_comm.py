@@ -36,7 +36,7 @@ class SerialInterface:
 
         self._conn: Any = None
         self._thread: threading.Thread | None = None
-        self._on_receive: Callable[[bytes], None] | None = None
+        self._on_receive: Callable[[bytes], None] = lambda _data: None
 
         self._last_sent: dict[int, float] = {}
 
@@ -162,24 +162,18 @@ class SerialInterface:
 
     def set_receive_callback(
             self,
-            callback: Callable[[bytes], None] | None,
+            callback: Callable[[bytes], None],
     ) -> None:
         self._on_receive = callback
 
     def _invoke_receive_callback(self, data: bytes) -> None:
-        """Invoke the optional receiver safely, including when cleared."""
-        callback = self._on_receive
-        if callback is None:
-            return
-        if not callable(callback):
-            logger.warning(
-                "Ignoring non-callable serial receive callback: %r", callback
-            )
-            return
         try:
-            callback(data)
+            self._on_receive(data)
         except Exception:
-            logger.warning("Serial receive callback failed", exc_info=True)
+            logger.warning(
+                "Serial receive callback failed",
+                exc_info=True,
+            )
 
     @staticmethod
     def _compute_crc(payload: bytes) -> bytes:
