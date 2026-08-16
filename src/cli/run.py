@@ -1426,4 +1426,7 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except KeyboardInterrupt:
         logger.warning("Startup interrupted by user; exiting cleanly.")
+        print()
+        print_banner("ShooterBot - By Shahm Najeeb")
+        print()
         raise SystemExit(130)
