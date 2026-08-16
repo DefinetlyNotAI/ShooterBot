@@ -1,112 +1,277 @@
-"""Quick local test to verify YOLO models and camera pipeline.
-
-It will:
-- Open webcam index 0
-- Capture a single frame
-- Attempt to load models: yolov8n.pt and yolo26n-face.pt (if present)
-- Run inference and print detections
-- Save annotated image to ./files/test_out.jpg
-"""
+from __future__ import annotations
 
 import sys
 import time
 from pathlib import Path
+from typing import Any
+
+import cv2
+from ultralytics.engine.results import Results
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import cv2
+from ultralytics import YOLO
 
-models = [
-    ROOT / "models" / "yolov8n.pt",
-    ROOT / "models" / "yolo26n-face.pt",
-]
-loaded = {}
 
-print("Python", sys.version)
-try:
-    import ultralytics
+def safe_str(value: Any) -> str:
+    if value is None:
+        return "None"
 
-    print("ultralytics", ultralytics.__version__)
-except Exception as e:
-    print("ultralytics import failed:", e)
+    return str(value)
 
-for model_path in models:
-    p = Path(model_path)
-    if not p.exists():
-        print(f"Model {p} not found in CWD")
-        continue
+
+def main() -> None:
+    model_paths = [
+        ROOT / "models" / "yolov8n.pt",
+        ROOT / "models" / "yolo26n-face.pt",
+    ]
+
+    loaded: dict[str, YOLO] = {}
+
+    print("Python", sys.version)
+
     try:
-        from ultralytics import YOLO
+        import ultralytics
 
-        print(f"Loading model {p}")
-        mdl = YOLO(str(p))
-        loaded[str(p.name)] = mdl
-        print(f"Loaded {p}")
-    except Exception as e:
-        print(f"Failed to load {p}:", e)
+        version = getattr(
+            ultralytics,
+            "__version__",
+            None,
+        )
 
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Failed to open camera 0")
-    sys.exit(1)
-ret, frame = cap.read()
-cap.release()
-if not ret:
-    print("Failed to read frame from camera")
-    sys.exit(1)
+        print(
+            "ultralytics",
+            safe_str(version),
+        )
 
-h, w = frame.shape[:2]
-print("Captured frame", w, "x", h)
+    except Exception as exc:
+        print(
+            "ultralytics import failed:",
+            safe_str(exc),
+        )
 
-out_img = frame.copy()
+    for model_path in model_paths:
+        if not model_path.exists():
+            print(
+                "Model",
+                str(model_path),
+                "not found",
+            )
+            continue
 
-for name, mdl in loaded.items():
-    print(f"Running inference with {name}...")
+        try:
+            print(
+                "Loading model",
+                str(model_path),
+            )
+
+            model = YOLO(str(model_path))
+
+            loaded[model_path.name] = model
+
+            print(
+                "Loaded",
+                str(model_path),
+            )
+
+        except Exception as exc:
+            print(
+                "Failed to load",
+                str(model_path),
+                safe_str(exc),
+            )
+
+    cap = cv2.VideoCapture(0)
+
     try:
-        t0 = time.time()
-        results = mdl.predict(frame)
-        t1 = time.time()
-        print(f"Inference time: {(t1 - t0) * 1000:.1f} ms")
-        for r in results:
-            boxes = getattr(r, "boxes", [])
-            for b in boxes:
-                try:
-                    xyxy = (
-                        b.xyxy[0].cpu().numpy()
-                        if hasattr(b.xyxy[0], "cpu")
-                        else b.xyxy[0]
-                    )
-                    conf = (
-                        float(b.conf[0])
-                        if hasattr(b, "conf")
-                        else float(b.conf)
-                    )
-                    cls = int(b.cls[0]) if hasattr(b, "cls") else int(b.cls)
-                    x1, y1, x2, y2 = map(int, xyxy)
-                    print(
-                        f" {name}: cls={cls} conf={conf:.2f} bbox={[x1, y1, x2, y2]}"
-                    )
-                    cv2.rectangle(
-                        out_img, (x1, y1), (x2, y2), (10, 200, 10), 2
-                    )
-                    cv2.putText(
-                        out_img,
-                        f"{name} {conf:.2f}",
-                        (x1, y1 - 6),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (255, 255, 255),
-                        1,
-                    )
-                except Exception as e:
-                    print(" box parse error:", e)
-    except Exception as e:
-        print(f"Inference failed for {name}:", e)
+        if not cap.isOpened():
+            raise RuntimeError("Failed to open camera 0")
 
-out_dir = ROOT / "files"
-out_dir.mkdir(exist_ok=True)
-out_path = out_dir / f"inference_{int(time.time())}.jpg"
-cv2.imwrite(str(out_path), out_img)
-print("Wrote", out_path)
-print("Done")
+        success, captured_frame = cap.read()
+
+        if not success or captured_frame is None:
+            raise RuntimeError(
+                "Failed to read frame from camera"
+            )
+
+        frame = captured_frame
+
+    finally:
+        cap.release()
+
+    frame_height, frame_width = frame.shape[:2]
+
+    print(
+        "Captured frame",
+        frame_width,
+        "x",
+        frame_height,
+    )
+
+    out_img = frame.copy()
+
+    for name, model in loaded.items():
+        print(
+            "Running inference with",
+            name,
+        )
+
+        try:
+            start_time = time.perf_counter()
+
+            results = model.predict(frame)
+
+            end_time = time.perf_counter()
+
+            inference_ms = float(
+                (end_time - start_time) * 1000.0
+            )
+
+            print(
+                f"Inference time: {inference_ms:.1f} ms"
+            )
+
+            for result in results:
+                if not isinstance(result, Results):
+                    continue
+
+                boxes = result.boxes
+
+                if boxes is None:
+                    continue
+
+                for box in boxes:
+                    try:
+                        xyxy_tensor = box.xyxy
+
+                        if xyxy_tensor is None or len(xyxy_tensor) == 0:
+                            continue
+
+                        coordinates = xyxy_tensor[0]
+
+                        if hasattr(coordinates, "cpu"):
+                            coordinates = coordinates.cpu()
+
+                        if hasattr(coordinates, "tolist"):
+                            coordinate_values = coordinates.tolist()
+                        else:
+                            coordinate_values = list(coordinates)
+
+                        if len(coordinate_values) != 4:
+                            continue
+
+                        x1 = int(coordinate_values[0])
+                        y1 = int(coordinate_values[1])
+                        x2 = int(coordinate_values[2])
+                        y2 = int(coordinate_values[3])
+
+                        confidence = 0.0
+
+                        if box.conf is not None and len(box.conf) > 0:
+                            confidence_value = box.conf[0]
+
+                            if hasattr(confidence_value, "item"):
+                                confidence = float(
+                                    confidence_value.item()
+                                )
+                            elif isinstance(
+                                    confidence_value,
+                                    (int, float),
+                            ):
+                                confidence = float(
+                                    confidence_value
+                                )
+
+                        class_id = -1
+
+                        if box.cls is not None and len(box.cls) > 0:
+                            class_value = box.cls[0]
+
+                            if hasattr(class_value, "item"):
+                                class_id = int(
+                                    class_value.item()
+                                )
+                            elif isinstance(
+                                    class_value,
+                                    (int, float),
+                            ):
+                                class_id = int(
+                                    class_value
+                                )
+
+                        bbox = [
+                            x1,
+                            y1,
+                            x2,
+                            y2,
+                        ]
+
+                        print(
+                            f" {name}: "
+                            f"cls={class_id} "
+                            f"conf={confidence:.2f} "
+                            f"bbox={bbox}"
+                        )
+
+                        cv2.rectangle(
+                            out_img,
+                            (x1, y1),
+                            (x2, y2),
+                            (10, 200, 10),
+                            2,
+                        )
+
+                        cv2.putText(
+                            out_img,
+                            f"{name} {confidence:.2f}",
+                            (x1, max(y1 - 6, 0)),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.5,
+                            (255, 255, 255),
+                            1,
+                        )
+
+                    except Exception as exc:
+                        print(
+                            "box parse error:",
+                            safe_str(exc),
+                        )
+
+        except Exception as exc:
+            print(
+                "Inference failed for",
+                name,
+                safe_str(exc),
+            )
+
+    out_dir = ROOT / "files"
+
+    out_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    out_path = (
+            out_dir
+            / f"inference_{int(time.time())}.jpg"
+    )
+
+    if not cv2.imwrite(
+            str(out_path),
+            out_img,
+    ):
+        raise RuntimeError(
+            f"Failed to write {out_path}"
+        )
+
+    print(
+        "Wrote",
+        str(out_path),
+    )
+
+    print("Done")
+
+
+if __name__ == "__main__":
+    main()
