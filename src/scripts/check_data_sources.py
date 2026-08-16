@@ -35,7 +35,7 @@ def source_is_approved(url: str) -> bool:
 
 def check_source(label: str, url: str) -> bool:
     if not source_is_approved(url):
-        print(f"{label}: rejected; source is not an approved HTTPS host")
+        print.warning(f"{label}: rejected; source is not an approved HTTPS host")
         return False
     request = urllib.request.Request(
         url,
@@ -46,16 +46,16 @@ def check_source(label: str, url: str) -> bool:
         with urllib.request.urlopen(request, timeout=15) as response:
             final_url = response.geturl()
             if not source_is_approved(final_url):
-                print(f"{label}: rejected; redirect target is unapproved")
+                print.warning(f"{label}: rejected; redirect target is unapproved")
                 return False
             print(f"{label}: online ({response.status})")
             return True
     except urllib.error.HTTPError as exc:
         # Some release providers reject HEAD. An HTTP response still proves the
         # endpoint is reachable, but a non-success status is reported clearly.
-        print(f"{label}: HTTP {exc.code}")
+        print.warning(f"{label}: HTTP {exc.code}")
     except urllib.error.URLError as exc:
-        print(f"{label}: offline ({exc.reason})")
+        print.warning(f"{label}: offline ({exc.reason})")
     return False
 
 
@@ -70,7 +70,7 @@ def main() -> None:
     )
     results = [check_source(label, url) for label, url in sources]
     print(f"Online approved sources: {sum(results)}/{len(results)}")
-    print(
+    print.warning(
         "Cryptographic integrity is not verified because no publisher-signed "
         "SHA-256 manifest is configured."
     )

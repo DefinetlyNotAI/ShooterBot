@@ -84,7 +84,7 @@ def main() -> None:
             benchmark_model(model_path, frame, args.runs)
         except Exception as exc:
             failed.append(model_path.name)
-            print(f"{model_path.name}: benchmark failed ({exc})")
+            print.warning(f"{model_path.name}: benchmark failed ({exc})")
     if failed:
         raise RuntimeError("Models that failed: " + ", ".join(failed))
 

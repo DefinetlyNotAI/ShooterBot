@@ -24,6 +24,32 @@ class ScriptOutput:
             end: str = "\n",
             **_ignored: Any,
     ) -> None:
+        self._emit(logging.INFO, *values, sep=sep, end=end)
+
+    def debug(self, *values: Any, sep: str = " ", **_ignored: Any) -> None:
+        """Record low-level script diagnostics."""
+        self._emit(logging.DEBUG, *values, sep=sep)
+
+    def info(self, *values: Any, sep: str = " ", **_ignored: Any) -> None:
+        """Record normal script progress."""
+        self._emit(logging.INFO, *values, sep=sep)
+
+    def warning(self, *values: Any, sep: str = " ", **_ignored: Any) -> None:
+        """Record a non-fatal script problem."""
+        self._emit(logging.WARNING, *values, sep=sep)
+
+    def error(self, *values: Any, sep: str = " ", **_ignored: Any) -> None:
+        """Record a script failure."""
+        self._emit(logging.ERROR, *values, sep=sep)
+
+    def _emit(
+            self,
+            level: int,
+            *values: Any,
+            sep: str = " ",
+            end: str = "\n",
+    ) -> None:
+        """Format output safely and send it to the configured logger."""
         message = sep.join(str(value) for value in values).rstrip()
         if not message:
             return
@@ -32,7 +58,7 @@ class ScriptOutput:
         if end != "\n":
             self._logger.debug("%s", message)
         else:
-            self._logger.info("%s", message)
+            self._logger.log(level, "%s", message)
 
 
 def configure_script_output(module_name: str) -> ScriptOutput:
