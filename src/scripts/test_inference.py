@@ -56,11 +56,11 @@ def main() -> None:
             safe_str(exc),
         )
 
-    for model_path in model_paths:
-        if not model_path.exists():
+    for model_file in model_paths:
+        if not model_file.exists():
             print(
                 "Model",
-                str(model_path),
+                str(model_file),
                 "not found",
             )
             continue
@@ -68,22 +68,22 @@ def main() -> None:
         try:
             print(
                 "Loading model",
-                str(model_path),
+                str(model_file),
             )
 
-            model = YOLO(str(model_path))
+            model = YOLO(str(model_file))
 
-            loaded[model_path.name] = model
+            loaded[model_file.name] = model
 
             print(
                 "Loaded",
-                str(model_path),
+                str(model_file),
             )
 
         except Exception as exc:
             print(
                 "Failed to load",
-                str(model_path),
+                str(model_file),
                 safe_str(exc),
             )
 
