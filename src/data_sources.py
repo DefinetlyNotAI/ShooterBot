@@ -16,7 +16,7 @@ MODEL_DOWNLOAD_URLS: Final[dict[str, str]] = {
     "yolov10n-face.pt": "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov10n-face.pt",
 }
 
-# SHA-256 pins for model artefacts that are distributed by the project.
+# SHA-256 pins for model artifacts that are distributed by the project.
 # A model without a pin is deliberately never downloaded automatically.
 MODEL_SHA256: Final[dict[str, str]] = {
     "yolov8n.pt": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
@@ -50,6 +50,6 @@ TRUSTED_DOWNLOAD_HOSTS: Final[frozenset[str]] = frozenset(
     }
 )
 
-# Avoid filling disks if a remote source responds with an unexpectedly large
-# file. Model downloads for this project are substantially smaller.
+# Avoid filling disks if a remote source responds with an unexpectedly large file.
+# Model downloads for this project are substantially smaller.
 MAX_EXTERNAL_DOWNLOAD_BYTES: Final = 2 * 1024 * 1024 * 1024

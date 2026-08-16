@@ -54,11 +54,17 @@ def benchmark_model(model_path: Path, frame: object, runs: int) -> None:
     print("Loading model:", model_path.name)
     model = YOLO(str(model_path))
     for _ in range(WARMUP_RUNS):
-        model.predict(source=frame, imgsz=IMG_SIZE, device=device, half=True, verbose=False)
+        model.predict(
+            source=frame, imgsz=IMG_SIZE, device=device,
+            quantize="fp16" if device.startswith("cuda") else None, verbose=False
+        )
     torch.cuda.synchronize()
     start = time.perf_counter()
     for _ in range(runs):
-        model.predict(source=frame, imgsz=IMG_SIZE, device=device, half=True, verbose=False)
+        model.predict(
+            source=frame, imgsz=IMG_SIZE, device=device,
+            quantize="fp16" if device.startswith("cuda") else None, verbose=False
+        )
     torch.cuda.synchronize()
     average_ms = (time.perf_counter() - start) / float(runs) * 1000.0
     fps = 1000.0 / average_ms if average_ms > 0.0 else 0.0
