@@ -47,6 +47,13 @@ class ScriptSpec:
 
 SCRIPTS = (
     ScriptSpec(
+        "support_report",
+        "Generate GitHub Support Report",
+        "src.scripts.support_report",
+        "Create a sensitive diagnostic report under logs/ for issue reports.",
+        config_required=False,
+    ),
+    ScriptSpec(
         "config_check",
         "Validate Configuration",
         "src.scripts.check_config",
@@ -72,13 +79,6 @@ SCRIPTS = (
         "Runtime Report",
         "src.scripts._runtime_report",
         "Report configuration, model, Python, and package readiness.",
-        config_required=False,
-    ),
-    ScriptSpec(
-        "support_report",
-        "Generate GitHub Support Report",
-        "src.scripts.support_report",
-        "Create a sensitive diagnostic report under logs/ for issue reports.",
         config_required=False,
     ),
     ScriptSpec(
@@ -305,6 +305,9 @@ def run_all_scripts(ui: UI) -> int:
     """Run eligible scripts one by one and keep going after individual failures."""
     failures = 0
     for spec in SCRIPTS:
+        if spec.key == "support_report":
+            ui.out("  Skipping Generate GitHub Support Report: run it manually when needed.", "dim")
+            continue
         issues = script_issues(spec, wait_for_cuda=True)
         if issues:
             ui.out(f"  Skipping {spec.label}: {'; '.join(issues)}", "yellow")

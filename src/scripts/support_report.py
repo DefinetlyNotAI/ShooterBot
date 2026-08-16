@@ -22,6 +22,7 @@ from src.scripts._runtime import configure_script_output
 print = configure_script_output(__name__)
 
 PACKAGES = ("torch", "torchvision", "ultralytics", "opencv-python", "numpy", "PyYAML", "pyserial")
+SENSITIVE_KEYS = {"password", "secret", "token", "key", "credential"}
 
 
 def package_versions() -> dict[str, str]:
@@ -51,6 +52,26 @@ def pip_check() -> str:
     return (result.stdout or result.stderr or "no issues reported").strip()
 
 
+def redact_config() -> str:
+    """Include configuration context without exposing obvious secret values."""
+    config_path = ROOT / "configs" / "default.yaml"
+    if not config_path.is_file():
+        return "configuration file is missing"
+    lines = []
+    for line in config_path.read_text(encoding="utf-8").splitlines():
+        key = line.partition(":")[0].strip().lower()
+        lines.append(f"{line.partition(':')[0]}: [REDACTED]" if key in SENSITIVE_KEYS else line)
+    return "\n".join(lines)
+
+
+def log_tail() -> str:
+    """Return recent application diagnostics, which may help issue triage."""
+    log_path = generated_directory("logs") / "nirt_shooterbot.log"
+    if not log_path.is_file():
+        return "application log is missing"
+    return "\n".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:])
+
+
 def main() -> None:
     """Write a timestamped, plain-text diagnostic report under root logs/."""
     print.warning(
@@ -62,6 +83,9 @@ def main() -> None:
         "project_root": str(ROOT),
         "user": os.environ.get("USERNAME") or os.environ.get("USER") or "unknown",
         "computer": socket.gethostname(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "cpu_count": os.cpu_count(),
         "platform": platform.platform(),
         "python": sys.version,
         "executable": sys.executable,
@@ -69,7 +93,9 @@ def main() -> None:
         "packages": package_versions(),
         "pip_check": pip_check(),
         "config_present": (ROOT / "configs" / "default.yaml").is_file(),
+        "redacted_config": redact_config(),
         "models": sorted(path.name for path in (ROOT / "models").glob("*.pt")),
+        "recent_application_log": log_tail(),
     }
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     destination = generated_directory("logs", create=True) / f"nirt_support_{timestamp}.json"
