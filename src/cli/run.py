@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 # ensure package imports resolve when running script directly
-import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
 
 from src.noise_control import configure_library_noise
 
@@ -16,10 +14,6 @@ _repo_root = str(Path(__file__).resolve().parents[2])
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-import argparse
-import time
-import json
-import cv2
 from src.config import load_config
 from src.utils import setup_logging, logger
 from src.camera import CameraManager, CameraStream
@@ -38,644 +32,1322 @@ from src.serial_comm import SerialInterface
 from src.optional_features import OptionalFeatures, face_appearance
 from src.setup_check import check_runtime_setup
 
+import argparse
+import json
+import logging
+import math
+import threading
+import time
 
-def main():
+from pathlib import Path
+from typing import Any, Dict, List
+
+import cv2
+
+
+class RealtimeCVApplication:
+    WINDOW_NAME = "realtime-cv"
+
+    def __init__(self, cfg) -> None:
+        self.cfg = cfg
+
+        self.cam_mgr = CameraManager()
+        self.detector = DetectorManager(cfg)
+        self.inf_worker = InferenceWorker(self.detector)
+
+        self.tracker = self._create_tracker()
+        self.optional_features = OptionalFeatures(cfg)
+        self.target_queue = TargetQueue(
+            cycle_remember=getattr(
+                cfg.tracking,
+                "cycle_remember",
+                True,
+            )
+        )
+
+        self.serial = self._create_serial()
+
+        self.serial_center: tuple[float, float] | None = None
+
+        self._shot_requested = False
+        self._shot_target_id: int | None = None
+        self._shot_lock = threading.Lock()
+
+        self.latest_click_tracks: list[
+            tuple[int, tuple[float, float, float, float]]
+        ] = []
+
+        self.last_results: dict[
+            int,
+            List[Dict[str, Any]],
+        ] = {}
+
+        self.last_time = time.time()
+        self.infer_time_ms = 0.0
+        self.smooth_pos: list[float] | None = None
+
+        self.track_only = getattr(
+            cfg.tracking,
+            "track_only",
+            None,
+        )
+
+        self.loop_logger = logging.getLogger("realtime_cv.loop")
+        self.inference_logger = logging.getLogger(
+            "realtime_cv.inference"
+        )
+        self.display_logger = logging.getLogger(
+            "realtime_cv.display"
+        )
+        self.serial_logger = logging.getLogger(
+            "realtime_cv.serial"
+        )
+
+    def _create_tracker(self):
+        cfg = self.cfg
+
+        max_age_value = getattr(cfg.tracking, "max_age", None)
+        if isinstance(max_age_value, int):
+            max_age = max_age_value
+        else:
+            max_age = int(cfg.tracking.max_lost)
+
+        return Tracker(
+            max_lost=int(cfg.tracking.max_lost),
+            iou_threshold=float(cfg.tracking.iou_threshold),
+            track_only=getattr(cfg.tracking, "track_only", None),
+            min_hits=int(getattr(cfg.tracking, "min_hits", 1)),
+            max_age=max_age,
+            class_priority=getattr(cfg.tracking, "class_priority", None),
+            remember_faces=bool(
+                getattr(cfg.tracking, "remember_faces", False)
+            ),
+            face_memory_threshold=float(
+                getattr(
+                    cfg.tracking,
+                    "face_memory_threshold",
+                    0.78,
+                )
+            ),
+            face_memory_max_age=int(
+                getattr(
+                    cfg.tracking,
+                    "face_memory_max_age",
+                    300,
+                )
+            ),
+        )
+
+    def _create_serial(self) -> SerialInterface:
+        cfg = self.cfg
+
+        simulation = (
+            cfg.serial.simulation
+            if getattr(cfg.serial, "enabled", False)
+            else True
+        )
+
+        return SerialInterface(
+            port=cfg.serial.port,
+            baudrate=cfg.serial.baudrate,
+            crc=cfg.serial.crc,
+            simulation=simulation,
+        )
+
+    def _setup_cameras(self) -> None:
+        cfg = self.cfg
+
+        for source in cfg.camera.sources:
+            simulate = self._should_simulate_camera(source)
+
+            camera = CameraStream(
+                source=source,
+                width=cfg.camera.width,
+                height=cfg.camera.height,
+                fps=cfg.camera.fps,
+                simulate=simulate,
+                sim_video=cfg.debug.simulation_video,
+                inject_fake_face=getattr(
+                    cfg.debug,
+                    "inject_fake_face",
+                    False,
+                ),
+                backend_preference=getattr(
+                    cfg.camera,
+                    "backend_preference",
+                    None,
+                ),
+            )
+
+            self.cam_mgr.add(camera)
+
+    def _should_simulate_camera(self, source) -> bool:
+        if self.cfg.debug.simulate_camera:
+            return True
+
+        if not isinstance(source, int):
+            return False
+
+        try:
+            test_cap = cv2.VideoCapture(source)
+
+            try:
+                opened = test_cap.isOpened()
+            finally:
+                test_cap.release()
+
+            if opened:
+                return False
+
+            logger.warning(
+                "Camera %s not available, falling back to simulation.",
+                source,
+            )
+
+            return True
+
+        except Exception:
+            logger.debug(
+                "Failed to test camera %s",
+                source,
+                exc_info=True,
+            )
+            return True
+
+    def _log_detectors(self) -> None:
+        try:
+            for name, detector_info in self.detector.detectors.items():
+                obj = detector_info.get("obj")
+
+                model_name = (
+                    getattr(obj, "model_name", None)
+                    if obj is not None
+                    else None
+                )
+
+                logger.info(
+                    "Loaded detector %s: type=%s model=%s priority=%s",
+                    name,
+                    detector_info.get("type"),
+                    model_name,
+                    detector_info.get("priority"),
+                )
+
+        except Exception:
+            logger.debug(
+                "Could not list detectors",
+                exc_info=True,
+            )
+
+    def _setup_serial(self) -> None:
+        self.serial.set_receive_callback(self._on_receive)
+        self.serial.start()
+
+    def _setup_window(self) -> None:
+        cv2.namedWindow(
+            self.WINDOW_NAME,
+            cv2.WINDOW_NORMAL,
+        )
+
+        cv2.setMouseCallback(
+            self.WINDOW_NAME,
+            self._on_mouse,
+        )
+
+    def _start(self) -> None:
+        self._setup_cameras()
+        self._log_detectors()
+
+        self.inf_worker.start()
+
+        self._setup_serial()
+        self._setup_window()
+
+    def _ensure_inference_worker(self) -> None:
+        try:
+            if self.inf_worker.thread_is_alive():
+                return
+
+            self.inference_logger.warning(
+                "Inference worker thread not alive; restarting"
+            )
+
+            self.inf_worker.stop()
+            self.inf_worker.start()
+
+        except Exception:
+            self.inference_logger.exception(
+                "Failed to restart inference worker"
+            )
+
+    def _request_shot(
+            self,
+            target_id: int | None = None,
+    ) -> None:
+        with self._shot_lock:
+            self._shot_requested = True
+            self._shot_target_id = target_id
+
+    def _consume_shot(
+            self,
+    ) -> tuple[int | None, bool]:
+        with self._shot_lock:
+            if not self._shot_requested:
+                return None, False
+
+            target_id = self._shot_target_id
+
+            self._shot_requested = False
+            self._shot_target_id = None
+
+            return target_id, True
+
+    def _on_receive(self, data: bytes) -> None:
+        try:
+            text = data.decode(
+                "utf-8",
+                errors="ignore",
+            ).strip()
+
+            if text.upper() in {
+                "SHOT",
+                "HIT",
+                "TRIGGER",
+            }:
+                self._request_shot()
+                return
+
+            payload = json.loads(text)
+
+            if (
+                    payload.get("shot") is True
+                    or payload.get("hit") is True
+                    or str(payload.get("event", "")).lower()
+                    in {"shot", "hit"}
+            ):
+                requested_id = payload.get("id")
+
+                self._request_shot(
+                    int(requested_id)
+                    if requested_id is not None
+                    else None
+                )
+                return
+
+            self._update_serial_center(payload)
+
+        except (
+                json.JSONDecodeError,
+                UnicodeDecodeError,
+                TypeError,
+                ValueError,
+        ):
+            self.serial_logger.debug(
+                "Ignored malformed serial packet",
+                exc_info=True,
+            )
+
+    def _update_serial_center(
+            self,
+            payload: dict[str, Any],
+    ) -> None:
+        nc_payload = payload.get("nc")
+
+        if (
+                isinstance(nc_payload, list)
+                and len(nc_payload) == 2
+        ):
+            try:
+                self.serial_center = (
+                    float(nc_payload[0]),
+                    float(nc_payload[1]),
+                )
+            except (TypeError, ValueError):
+                pass
+
+            return
+
+        if "x" not in payload or "y" not in payload:
+            return
+
+        try:
+            self.serial_center = (
+                float(payload["x"]),
+                float(payload["y"]),
+            )
+        except (TypeError, ValueError):
+            pass
+
+    def _on_mouse(
+            self,
+            event: int,
+            x: int,
+            y: int,
+            _flags: int,
+            _param: Any,
+    ) -> None:
+        if event != cv2.EVENT_LBUTTONDOWN:
+            return
+
+        if not self.cfg.debug.enabled:
+            return
+
+        for track_id, bbox in reversed(
+                self.latest_click_tracks
+        ):
+            x1, y1, x2, y2 = map(int, bbox)
+
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                self._request_shot(track_id)
+                return
+
+    def _get_detections(
+            self,
+            camera_index: int,
+            frame,
+            frame_timestamp: float,
+    ) -> tuple[
+        List[Dict[str, Any]],
+        float,
+        bool,
+        Any,
+    ]:
+        fresh_result = False
+        result = None
+
+        try:
+            self.loop_logger.debug(
+                "Main loop frame idx=%s ts=%s",
+                camera_index,
+                frame_timestamp,
+            )
+
+            try:
+                self.inf_worker.submit(
+                    camera_index,
+                    frame,
+                    frame_timestamp,
+                )
+
+            except Exception:
+                self.loop_logger.exception(
+                    "Failed to submit frame to inference worker"
+                )
+
+            result = self.inf_worker.get(camera_index)
+
+            if result:
+                detections = result["detections"]
+
+                self.infer_time_ms = result[
+                    "inference_time_ms"
+                ]
+
+                self.last_results[
+                    camera_index
+                ] = detections
+
+                timestamp = result["timestamp"]
+                fresh_result = True
+
+            else:
+                detections = self.last_results.get(
+                    camera_index,
+                    [],
+                )
+                timestamp = time.time()
+
+        except Exception:
+            self.loop_logger.exception(
+                "Frame inference handling failed"
+            )
+
+            detections = []
+            timestamp = time.time()
+
+        return (
+            detections,
+            timestamp,
+            fresh_result,
+            result,
+        )
+
+    def _process_fresh_detections(
+            self,
+            frame,
+            detections: List[Dict[str, Any]],
+    ) -> None:
+        for detection in detections:
+            class_name = detection.get("class_name")
+
+            if not isinstance(class_name, str):
+                class_name = detection.get("label")
+
+            if (
+                    isinstance(class_name, str)
+                    and class_name.lower() == "face"
+            ):
+                detection["appearance"] = face_appearance(
+                    frame,
+                    detection.get("bbox"),
+                )
+
+        self.optional_features.annotate_emotions(
+            frame,
+            detections,
+        )
+
+    def _publish_detection_dump(
+            self,
+            camera_index: int,
+            detections: List[Dict[str, Any]],
+            timestamp: float,
+            result: Any,
+    ) -> None:
+        if not (
+                self.cfg.serial.advanced_datapackets
+                and result
+                and detections
+        ):
+            return
+
+        events = []
+
+        for detection in detections:
+            events.append(
+                {
+                    "bbox": detection.get("bbox"),
+                    "bbox_normalized": detection.get(
+                        "bbox_normalized"
+                    ),
+                    "center": detection.get("center"),
+                    "normalized_center": detection.get(
+                        "normalized_center"
+                    ),
+                    "class_id": detection.get("class_id"),
+                    "class_name": detection.get(
+                        "class_name"
+                    ),
+                    "confidence": detection.get(
+                        "confidence"
+                    ),
+                    "timestamp": timestamp,
+                }
+            )
+
+        if not events:
+            return
+
+        print(
+            json.dumps(
+                {
+                    "camera_index": camera_index,
+                    "timestamp": timestamp,
+                    "detections": events,
+                }
+            )
+        )
+
+    def _update_tracking(
+            self,
+            detections: List[Dict[str, Any]],
+            timestamp: float,
+    ):
+        tracks = self.tracker.update(
+            detections,
+            timestamp,
+        )
+
+        self.target_queue.sync(tracks)
+
+        shot_id, requested = self._consume_shot()
+
+        if requested:
+            self.target_queue.mark_shot(
+                shot_id
+                if shot_id is not None
+                else self.target_queue.current_id
+            )
+
+        target_id = self.target_queue.select_next()
+
+        tracks_by_id = {
+            track.id: track
+            for track in tracks
+        }
+
+        primary = (
+            tracks_by_id.get(target_id)
+            if target_id is not None
+            else None
+        )
+
+        if primary is not None and primary.lost != 0:
+            primary = None
+
+        return tracks, primary
+
+    @staticmethod
+    def _is_detection_match(
+            detection: dict[str, Any],
+            track: Any,
+            threshold_px: float = 40,
+    ) -> bool:
+        try:
+            bbox = detection["bbox"]
+
+            dcx = (bbox[0] + bbox[2]) / 2.0
+            dcy = (bbox[1] + bbox[3]) / 2.0
+
+            tcx = (
+                          track.bbox[0] + track.bbox[2]
+                  ) / 2.0
+
+            tcy = (
+                          track.bbox[1] + track.bbox[3]
+                  ) / 2.0
+
+            distance = math.hypot(
+                dcx - tcx,
+                dcy - tcy,
+            )
+
+            return distance <= threshold_px
+
+        except (
+                KeyError,
+                TypeError,
+                IndexError,
+        ):
+            return False
+
+    def _draw_detections(
+            self,
+            frame,
+            detections: List[Dict[str, Any]],
+            primary: Any,
+    ) -> None:
+        height, width = frame.shape[:2]
+
+        frame_cx = width / 2.0
+        frame_cy = height / 2.0
+
+        threshold = getattr(
+            self.cfg.visualization,
+            "center_threshold_px",
+            40,
+        )
+
+        real_mode = not self.serial.simulation
+
+        for detection in detections:
+            bbox = detection["bbox"]
+            class_name = detection.get("class_name")
+
+            if isinstance(class_name, str):
+                label = class_name
+            else:
+                class_id = detection.get("class_id")
+
+                label = (
+                    str(class_id)
+                    if isinstance(
+                        class_id,
+                        (int, float),
+                    )
+                    else ""
+                )
+
+            emotion = detection.get("emotion")
+
+            if isinstance(emotion, str) and emotion:
+                label = f"{label} | {emotion}"
+
+            if real_mode:
+                color = self._get_detection_color(
+                    bbox,
+                    frame_cx,
+                    frame_cy,
+                    threshold,
+                )
+            else:
+                color = (200, 200, 200)
+
+                if (
+                    primary is not None
+                    and self._is_detection_match(detection, primary, threshold_px=50)
+                ):
+                    color = (20, 150, 255)
+
+            draw_detection(
+                frame,
+                bbox,
+                label=label,
+                confidence=detection.get(
+                    "confidence",
+                    0.0,
+                ),
+                color=color,
+            )
+
+    @staticmethod
+    def _get_detection_color(
+            bbox,
+            frame_cx: float,
+            frame_cy: float,
+            threshold: float,
+    ):
+        try:
+            dcx = (bbox[0] + bbox[2]) / 2.0
+            dcy = (bbox[1] + bbox[3]) / 2.0
+
+            distance = math.hypot(
+                dcx - frame_cx,
+                dcy - frame_cy,
+            )
+
+            if distance <= threshold:
+                return 0, 200, 0
+
+        except (
+                TypeError,
+                IndexError,
+        ):
+            pass
+
+        return 0, 200, 200
+
+    @staticmethod
+    def _draw_hands(
+            frame,
+            hand_results,
+    ) -> None:
+        for hand in hand_results:
+            points = hand.get("points", [])
+
+            for point in points:
+                cv2.circle(
+                    frame,
+                    point,
+                    3,
+                    (255, 180, 0),
+                    -1,
+                    lineType=cv2.LINE_AA,
+                )
+
+            if not points:
+                continue
+
+            hx = min(point[0] for point in points)
+
+            hy = max(
+                15,
+                min(point[1] for point in points) - 8,
+            )
+
+            text = (
+                f"{hand.get('handedness', 'hand')}: "
+                f"{hand.get('gesture', 'unknown')}"
+            )
+
+            cv2.putText(
+                frame,
+                text,
+                (hx, hy),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 220, 80),
+                1,
+                cv2.LINE_AA,
+            )
+
+    @staticmethod
+    def _draw_secondary_tracks(
+            frame,
+            tracks,
+            primary,
+    ) -> None:
+        for track in tracks:
+            if (
+                    primary is None
+                    or track.id != primary.id
+            ):
+                draw_track(
+                    frame,
+                    track,
+                    color=(120, 120, 120),
+                )
+
+    def _draw_primary_track(
+            self,
+            frame,
+            primary,
+    ) -> dict[str, Any] | None:
+        if primary is None:
+            return None
+
+        height, width = frame.shape[:2]
+
+        frame_cx = width / 2.0
+        frame_cy = height / 2.0
+
+        threshold = getattr(
+            self.cfg.visualization,
+            "center_threshold_px",
+            40,
+        )
+
+        center_x = (
+                           primary.bbox[0] + primary.bbox[2]
+                   ) / 2.0
+
+        center_y = (
+                           primary.bbox[1] + primary.bbox[3]
+                   ) / 2.0
+
+        center_distance = math.hypot(
+            center_x - frame_cx,
+            center_y - frame_cy,
+        )
+
+        if (
+                not self.serial.simulation
+                and center_distance <= threshold
+        ):
+            track_color = (0, 200, 0)
+        else:
+            track_color = (0, 180, 80)
+
+        draw_track(
+            frame,
+            primary,
+            color=track_color,
+        )
+
+        self._draw_prediction(
+            frame,
+            primary,
+        )
+
+        class_name = self._class_name(
+            primary.class_id
+        )
+
+        normalized_center = (
+            center_x / width,
+            center_y / height,
+        )
+
+        self._update_smooth_position(
+            normalized_center
+        )
+
+        return {
+            "class_name": class_name,
+            "confidence": primary.confidence,
+            "bbox": list(primary.bbox),
+        }
+
+    def _draw_prediction(
+            self,
+            frame,
+            primary,
+    ) -> None:
+        try:
+            height, width = frame.shape[:2]
+
+            lead = getattr(
+                self.cfg.tracking,
+                "extrapolate_secs",
+                0.2,
+            )
+
+            cx = (
+                         primary.bbox[0] + primary.bbox[2]
+                 ) / 2.0
+
+            cy = (
+                         primary.bbox[1] + primary.bbox[3]
+                 ) / 2.0
+
+            px = cx + primary.velocity[0] * lead
+            py = cy + primary.velocity[1] * lead
+
+            px = max(
+                0,
+                min(width - 1, px),
+            )
+
+            py = max(
+                0,
+                min(height - 1, py),
+            )
+
+            cv2.line(
+                frame,
+                (int(cx), int(cy)),
+                (int(px), int(py)),
+                (0, 200, 255),
+                2,
+                lineType=cv2.LINE_AA,
+            )
+
+            cv2.circle(
+                frame,
+                (int(px), int(py)),
+                5,
+                (0, 200, 255),
+                -1,
+                lineType=cv2.LINE_AA,
+            )
+
+        except Exception:
+            self.display_logger.debug(
+                "Could not draw target prediction",
+                exc_info=True,
+            )
+
+    def _update_smooth_position(
+            self,
+            normalized_center: tuple[float, float],
+    ) -> None:
+        if self.smooth_pos is None:
+            self.smooth_pos = list(
+                normalized_center
+            )
+            return
+
+        self.smooth_pos[0] = (
+                self.smooth_pos[0] * 0.8
+                + normalized_center[0] * 0.2
+        )
+
+        self.smooth_pos[1] = (
+                self.smooth_pos[1] * 0.8
+                + normalized_center[1] * 0.2
+        )
+
+    @staticmethod
+    def _class_name(class_id: int) -> str:
+        try:
+            from src.coco import COCO_CLASSES
+
+            if 0 <= class_id < len(COCO_CLASSES):
+                name = COCO_CLASSES[class_id]
+
+                return (
+                    name
+                    if isinstance(name, str)
+                    else str(class_id)
+                )
+
+        except (
+                IndexError,
+                TypeError,
+        ):
+            pass
+
+        return str(class_id)
+
+    def _draw_center_ui(
+            self,
+            frame,
+    ) -> None:
+        center = None
+
+        if (
+                self.cfg.debug.enabled
+                and self.serial.simulation
+        ):
+            center = self.serial_center
+
+            if center is None:
+                current_time = time.time()
+
+                center = (
+                    0.5
+                    + 0.35
+                    * math.sin(current_time * 0.8),
+                    0.5
+                    + 0.25
+                    * math.cos(current_time * 0.6),
+                )
+
+        draw_center_ui(
+            frame,
+            center,
+        )
+
+    def _draw_panels(
+            self,
+            frame,
+            tracked_info,
+    ) -> None:
+        draw_top_left_panel(
+            frame,
+            tracked_info,
+            looking_for=self.track_only,
+        )
+
+        if getattr(
+                self.cfg.visualization,
+                "show_tracking_queue",
+                True,
+        ):
+            draw_tracking_queue(
+                frame,
+                self.target_queue.target_ids(),
+                self.target_queue.current_id,
+            )
+
+    def _device_name(self) -> str:
+        device = getattr(
+            self.detector,
+            "device",
+            None,
+        )
+
+        if isinstance(device, str) and device:
+            return device
+
+        try:
+            first_detector = next(
+                iter(
+                    self.detector.detectors.values()
+                )
+            )
+
+            return str(
+                getattr(
+                    first_detector.get("obj"),
+                    "device",
+                    None,
+                )
+                or "cpu"
+            )
+
+        except Exception:
+            return "cpu"
+
+    def _display_frame(
+            self,
+            frame,
+            detections,
+            tracks,
+    ) -> None:
+        now = time.time()
+
+        elapsed = now - self.last_time
+
+        fps = (
+            1.0 / elapsed
+            if elapsed > 0
+            else 0.0
+        )
+
+        self.last_time = now
+
+        try:
+            show_info(
+                frame,
+                fps,
+                self.infer_time_ms,
+                device=self._device_name(),
+                detections=len(detections),
+                tracks=len(tracks),
+                font_scale_override=0.42,
+            )
+
+            cv2.imshow(
+                self.WINDOW_NAME,
+                frame,
+            )
+
+            self.latest_click_tracks = [
+                (track.id, track.bbox)
+                for track in tracks
+                if track.lost == 0 and not self.target_queue.is_hit(track.id)
+            ]
+
+        except Exception:
+            self.display_logger.exception(
+                "Failed to render frame"
+            )
+
+    def _send_telemetry(
+            self,
+            frame,
+            primary,
+            timestamp: float,
+    ) -> None:
+        if primary is None:
+            return
+
+        try:
+            height, width = frame.shape[:2]
+
+            cx = (
+                         primary.bbox[0] + primary.bbox[2]
+                 ) / 2.0
+
+            cy = (
+                         primary.bbox[1] + primary.bbox[3]
+                 ) / 2.0
+
+            normalized_center = [
+                cx / width,
+                cy / height,
+            ]
+
+            lead = getattr(
+                self.cfg.tracking,
+                "extrapolate_secs",
+                0.2,
+            )
+
+            predicted_x = (
+                    cx + primary.velocity[0] * lead
+            )
+
+            predicted_y = (
+                    cy + primary.velocity[1] * lead
+            )
+
+            predicted_center = [
+                predicted_x / width,
+                predicted_y / height,
+            ]
+
+            self.serial.send_telemetry(
+                primary.id,
+                self._class_name(
+                    primary.class_id
+                ),
+                primary.confidence,
+                normalized_center,
+                [
+                    primary.velocity[0],
+                    primary.velocity[1],
+                ],
+                timestamp,
+                predicted_center=predicted_center,
+                require_ack=False,
+                advanced=(
+                    self.cfg.serial
+                    .advanced_datapackets
+                ),
+            )
+
+        except Exception:
+            self.serial_logger.exception(
+                "Failed to send telemetry"
+            )
+
+    def _process_frame(
+            self,
+            camera_index: int,
+            frame_timestamp: float,
+            frame,
+    ) -> None:
+        (
+            detections,
+            timestamp,
+            fresh_result,
+            result,
+        ) = self._get_detections(
+            camera_index,
+            frame,
+            frame_timestamp,
+        )
+
+        if fresh_result:
+            self._process_fresh_detections(
+                frame,
+                detections,
+            )
+
+        hand_results = (
+            self.optional_features.detect_hands(
+                frame
+            )
+        )
+
+        self._publish_detection_dump(
+            camera_index,
+            detections,
+            timestamp,
+            result,
+        )
+
+        tracks, primary = self._update_tracking(
+            detections,
+            timestamp,
+        )
+
+        self._draw_detections(
+            frame,
+            detections,
+            primary,
+        )
+
+        self._draw_hands(
+            frame,
+            hand_results,
+        )
+
+        self._draw_secondary_tracks(
+            frame,
+            tracks,
+            primary,
+        )
+
+        tracked_info = self._draw_primary_track(
+            frame,
+            primary,
+        )
+
+        self._draw_center_ui(frame)
+
+        self._draw_panels(
+            frame,
+            tracked_info,
+        )
+
+        self._display_frame(
+            frame,
+            detections,
+            tracks,
+        )
+
+        self._send_telemetry(
+            frame,
+            primary,
+            timestamp,
+        )
+
+    @staticmethod
+    def _quit_requested() -> bool:
+        try:
+            return (
+                    cv2.waitKey(1) & 0xFF
+            ) == ord("q")
+
+        except Exception:
+            return False
+
+    def run(self) -> None:
+        self._start()
+
+        try:
+            while True:
+                self._ensure_inference_worker()
+
+                frames = self.cam_mgr.read_all()
+
+                if not frames:
+                    time.sleep(0.005)
+                    continue
+
+                for (
+                        camera_index,
+                        timestamp,
+                        frame,
+                ) in frames:
+                    self._process_frame(
+                        camera_index,
+                        timestamp,
+                        frame,
+                    )
+
+                    if self._quit_requested():
+                        raise KeyboardInterrupt
+
+        except KeyboardInterrupt:
+            logger.info("Shutting down")
+
+        finally:
+            self.shutdown()
+
+    def shutdown(self) -> None:
+        try:
+            self.inf_worker.stop()
+        except Exception:
+            logger.debug(
+                "Failed to stop inference worker",
+                exc_info=True,
+            )
+
+        try:
+            self.cam_mgr.stop_all()
+        except Exception:
+            logger.debug(
+                "Failed to stop cameras",
+                exc_info=True,
+            )
+
+        try:
+            self.serial.stop()
+        except Exception:
+            logger.debug(
+                "Failed to stop serial interface",
+                exc_info=True,
+            )
+
+        cv2.destroyAllWindows()
+
+
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
         "--config",
-        required=False,
         default="configs/default.yaml",
         help="Path to YAML config",
     )
-    args = parser.parse_args()
-    config_path = str(Path(args.config).resolve())
-    if not os.path.isfile(config_path):
+
+    return parser.parse_args()
+
+
+def load_application_config(config_argument: str):
+    config_path = Path(
+        config_argument
+    ).resolve()
+
+    if not config_path.is_file():
         print(
             f"Configuration was not found: {config_path}\n"
             "Run the installer first: python -m src.cli.installer"
         )
         raise SystemExit(2)
-    cfg = load_config(config_path)
+
+    cfg = load_config(str(config_path))
+
     setup_logging(
         cfg.logging.level,
         cfg.logging.file,
         color=cfg.logging.color,
         verbose=cfg.logging.verbose,
     )
+
     try:
         check_runtime_setup(cfg)
+
     except RuntimeError as exc:
-        logger.critical("Setup check failed: %s", exc)
+        logger.critical(
+            "Setup check failed: %s",
+            exc,
+        )
         raise SystemExit(2) from exc
 
-    cam_mgr = CameraManager()
-    import logging
+    return cfg
 
-    for src in cfg.camera.sources:
-        # prefer real camera unless user explicitly requested simulation
-        requested_sim = cfg.debug.simulate_camera
-        sim_video = cfg.debug.simulation_video
-        sim = requested_sim
-        # if simulation not requested, test whether camera opens; if not, fall back to simulation
-        if not requested_sim and isinstance(src, int):
-            try:
-                test_cap = cv2.VideoCapture(int(src))
-                ok = test_cap.isOpened()
-                test_cap.release()
-                if not ok:
-                    logging.getLogger("realtime_cv").warning(
-                        "Camera %s not available, falling back to simulation.",
-                        src,
-                    )
-                    sim = True
-                else:
-                    sim = False
-            except Exception:
-                sim = True
-        cam = CameraStream(
-            source=src,
-            width=cfg.camera.width,
-            height=cfg.camera.height,
-            fps=cfg.camera.fps,
-            simulate=sim,
-            sim_video=sim_video,
-            inject_fake_face=getattr(cfg.debug, "inject_fake_face", False),
-            backend_preference=getattr(cfg.camera, "backend_preference", None),
-        )
-        cam_mgr.add(cam)
 
-    detector = DetectorManager(cfg)
-    # log loaded detectors for diagnostics
-    try:
-        for k, v in detector.detectors.items():
-            obj = v.get("obj")
-            mname = (
-                getattr(obj, "model_name", None) if obj is not None else None
-            )
-            logger.info(
-                "Loaded detector %s: type=%s model=%s priority=%s",
-                k,
-                v.get("type"),
-                mname,
-                v.get("priority"),
-            )
-    except Exception:
-        logger.debug("Could not list detectors", exc_info=True)
-    # create inference worker to reduce UI lag
-    inf_worker = InferenceWorker(detector)
-    inf_worker.start()
+def main() -> None:
+    args = parse_args()
+    cfg = load_application_config(args.config)
 
-    track_only = getattr(cfg.tracking, "track_only", None)
-    tracker = Tracker(
-        max_lost=cfg.tracking.max_lost,
-        iou_threshold=cfg.tracking.iou_threshold,
-        track_only=track_only,
-        min_hits=getattr(cfg.tracking, "min_hits", 1),
-        max_age=getattr(cfg.tracking, "max_age", cfg.tracking.max_lost),
-        class_priority=getattr(cfg.tracking, "class_priority", None),
-        remember_faces=getattr(cfg.tracking, "remember_faces", False),
-        face_memory_threshold=getattr(
-            cfg.tracking, "face_memory_threshold", 0.78
-        ),
-        face_memory_max_age=getattr(cfg.tracking, "face_memory_max_age", 300),
-    )
-    optional_features = OptionalFeatures(cfg)
-    target_queue = TargetQueue(
-        cycle_remember=getattr(cfg.tracking, "cycle_remember", True)
-    )
-    # Decide serial simulation mode:
-    # - If serial is not enabled in config, always simulate (safe default)
-    # - If serial.enabled is True, use the configured simulation setting
-    if not getattr(cfg.serial, "enabled", False):
-        sim_mode = True
-    else:
-        sim_mode = cfg.serial.simulation
-    serial = SerialInterface(
-        port=cfg.serial.port,
-        baudrate=cfg.serial.baudrate,
-        crc=cfg.serial.crc,
-        simulation=sim_mode,
-    )
-
-    # ensure inference worker remains alive; restart if thread died
-    def _ensure_inf_worker():
-        try:
-            if not inf_worker.thread_is_alive():
-                inference_logger = __import__("logging").getLogger(
-                    "realtime_cv.inference"
-                )
-                inference_logger.warning(
-                    "Inference worker thread not alive; restarting"
-                )
-                inf_worker.stop()
-                inf_worker.start()
-        except Exception:
-            pass
-
-    # Shared event state: serial callbacks run on the serial reader thread.
-    serial_center: dict[str, tuple[float, float] | None] = {
-        "nc": None
-    }
-    shot_state = {"requested": False, "target_id": None}
-    import threading
-
-    shot_lock = threading.Lock()
-
-    def _request_shot(shot_target_id=None):
-        with shot_lock:
-            shot_state["requested"] = True
-            shot_state["target_id"] = shot_target_id
-
-    def _consume_shot():
-        with shot_lock:
-            if not shot_state["requested"]:
-                return None, False
-            shot_target_id = shot_state["target_id"]
-            shot_state["requested"] = False
-            shot_state["target_id"] = None
-            return shot_target_id, True
-
-    def _on_receive(data: bytes):
-        try:
-            import json
-
-            text = data.decode("utf-8", errors="ignore").strip()
-            # Accept a compact line signal as well as JSON from the Arduino.
-            if text.upper() in {"SHOT", "HIT", "TRIGGER"}:
-                _request_shot()
-                return
-            payload = json.loads(text)
-            if (
-                    payload.get("shot") is True
-                    or payload.get("hit") is True
-                    or str(payload.get("event", "")).lower() in {"shot", "hit"}
-            ):
-                requested_id = payload.get("id")
-                _request_shot(
-                    int(requested_id) if requested_id is not None else None
-                )
-                return
-            # support both legacy 'nc' and simplified 'x','y' telemetry
-            if (
-                    "nc" in payload
-                    and isinstance(payload.get("nc"), list)
-                    and len(payload.get("nc")) == 2
-            ):
-                nc_payload = payload.get("nc")
-                if isinstance(nc_payload, list) and len(nc_payload) == 2:
-                    serial_center["nc"] = (
-                        float(nc_payload[0]),
-                        float(nc_payload[1]),
-                    )
-                elif "x" in payload and "y" in payload:
-                    try:
-                        serial_center["nc"] = (
-                            float(payload["x"]),
-                            float(payload["y"]),
-                        )
-                    except (TypeError, ValueError):
-                        pass
-            elif "x" in payload and "y" in payload:
-                try:
-                    serial_center["nc"] = (
-                        float(payload.get("x")),
-                        float(payload.get("y")),
-                    )
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    serial.set_receive_callback(_on_receive)
-    serial.start()
-
-    cv2.namedWindow("realtime-cv", cv2.WINDOW_NORMAL)
-    latest_click_tracks = []
-
-    def _on_mouse(event, x, y, _flags, _param):
-        if event != cv2.EVENT_LBUTTONDOWN:
-            return
-        # In debug mode a click inside any displayed target is the shot signal.
-        if not cfg.debug.enabled:
-            return
-        for track_id, _bbox in reversed(latest_click_tracks):
-            x1, y1, x2, y2 = map(int, _bbox)
-            if x1 <= x <= x2 and y1 <= y <= y2:
-                _request_shot(track_id)
-                return
-
-    cv2.setMouseCallback("realtime-cv", _on_mouse)
-    last_time = time.time()
-    infer_time_ms = 0.0
-    last_results: dict[int, List[Dict[str, Any]]] = {}
-    smooth_pos = None
-    try:
-        while True:
-            # ensure inference worker running
-            try:
-                _ensure_inf_worker()
-            except Exception:
-                pass
-            frames = cam_mgr.read_all()
-            if not frames:
-                time.sleep(0.005)
-                continue
-            for idx, ts, frame in frames:
-                fresh_result = False
-                res = None
-
-                try:
-                    loop_logger = __import__("logging").getLogger(
-                        "realtime_cv.loop"
-                    )
-                    loop_logger.debug("Main loop frame idx=%s ts=%s", idx, ts)
-                    # submit frame for background inference (non-blocking)
-                    try:
-                        inf_worker.submit(idx, frame, ts)
-                    except Exception:
-                        loop_logger = __import__("logging").getLogger(
-                            "realtime_cv.loop"
-                        )
-                        loop_logger.exception(
-                            "Failed to submit frame to inference worker"
-                        )
-                    # try to get latest result for this camera
-                    res = inf_worker.get(idx)
-                    if res:
-                        dets = res["detections"]
-                        infer_time_ms = res["inference_time_ms"]
-                        last_results[idx] = dets
-                        timestamp = res["timestamp"]
-                        fresh_result = True
-                    else:
-                        dets = last_results.get(idx, [])
-                        timestamp = time.time()
-                except Exception:
-                    import traceback
-
-                    traceback.print_exc()
-                    dets = []
-                    timestamp = time.time()
-
-                if fresh_result:
-                    for detection in dets:
-                        class_name = detection.get("class_name")
-                        if not isinstance(class_name, str):
-                            class_name = detection.get("label")
-
-                        if isinstance(class_name, str) and class_name.lower() == "face":
-                            detection["appearance"] = face_appearance(
-                                frame, detection.get("bbox")
-                            )
-
-                    optional_features.annotate_emotions(frame, dets)
-
-                hand_results = optional_features.detect_hands(frame)
-
-                # Detailed detection dumps are opt-in; normal operation stays quiet.
-                if cfg.serial.advanced_datapackets and res and dets:
-                    det_events = []
-                    for d in dets:
-                        det_events.append(
-                            {
-                                "bbox": d.get("bbox"),
-                                "bbox_normalized": d.get("bbox_normalized"),
-                                "center": d.get("center"),
-                                "normalized_center": d.get(
-                                    "normalized_center"
-                                ),
-                                "class_id": d.get("class_id"),
-                                "class_name": d.get("class_name", None),
-                                "confidence": d.get("confidence"),
-                                "timestamp": timestamp,
-                            }
-                        )
-                    if det_events:
-                        print(
-                            json.dumps(
-                                {
-                                    "camera_index": idx,
-                                    "timestamp": timestamp,
-                                    "detections": det_events,
-                                }
-                            )
-                        )
-
-                # update tracker only with detections intended for tracking
-                tracks = tracker.update(dets, timestamp)
-                target_queue.sync(tracks)
-                # A hardware shot has the same effect as a debug click.
-                shot_id, shot_requested = _consume_shot()
-                if shot_requested:
-                    target_queue.mark_shot(
-                        shot_id
-                        if shot_id is not None
-                        else target_queue.current_id
-                    )
-                target_id = target_queue.select_next()
-                tracks_by_id = {track.id: track for track in tracks}
-                primary = (
-                    tracks_by_id.get(target_id)
-                    if target_id is not None
-                    else None
-                )
-                if primary is not None and primary.lost != 0:
-                    primary = None
-
-                # visualization: draw ALL detections, but only draw tracked overlay for primary
-                # helper to match a detection to primary by center distance
-                def _is_match(det, tr, thresh_px=40):
-                    try:
-                        match_cx = (det["bbox"][0] + det["bbox"][2]) / 2.0
-                        match_cy = (det["bbox"][1] + det["bbox"][3]) / 2.0
-                        tcx = (tr.bbox[0] + tr.bbox[2]) / 2.0
-                        tcy = (tr.bbox[1] + tr.bbox[3]) / 2.0
-                        return (
-                                (match_cx - tcx) ** 2 + (match_cy - tcy) ** 2
-                        ) ** 0.5 <= thresh_px
-                    except Exception:
-                        return False
-
-                # determine modes
-                real_mode = not serial.simulation
-                h, w = frame.shape[:2]
-                frame_cx, frame_cy = w / 2.0, h / 2.0
-                center_thresh_px = getattr(
-                    cfg.visualization, "center_threshold_px", 40
-                )
-
-                for d in dets:
-                    bbox = d["bbox"]
-                    class_name = d.get("class_name")
-
-                    if isinstance(class_name, str):
-                        label = class_name
-                    else:
-                        class_id = d.get("class_id")
-                        label = str(class_id) if isinstance(class_id, (int, float)) else ""
-
-                    if d.get("emotion"):
-                        label = f"{label} | {d['emotion']}"
-                    # color selection depends on mode
-                    if real_mode:
-                        # compute det center
-                        try:
-                            dcx = (bbox[0] + bbox[2]) / 2.0
-                            dcy = (bbox[1] + bbox[3]) / 2.0
-                            dist = (
-                                           (dcx - frame_cx) ** 2 + (dcy - frame_cy) ** 2
-                                   ) ** 0.5
-                            if dist <= center_thresh_px:
-                                color = (0, 200, 0)  # green when centered
-                            else:
-                                color = (
-                                    0,
-                                    200,
-                                    200,
-                                )  # yellow/turquoise when not centered
-                        except Exception:
-                            color = (0, 200, 200)
-                    else:
-                        # debug/simulated mode: muted boxes, highlight primary in blue
-                        color = (200, 200, 200)
-                        if primary and _is_match(d, primary, thresh_px=50):
-                            color = (20, 150, 255)
-                    draw_detection(
-                        frame,
-                        bbox,
-                        label=label,
-                        confidence=d.get("confidence", 0.0),
-                        color=color,
-                    )
-
-                for hand in hand_results:
-                    points = hand.get("points", [])
-                    for point in points:
-                        cv2.circle(
-                            frame,
-                            point,
-                            3,
-                            (255, 180, 0),
-                            -1,
-                            lineType=cv2.LINE_AA,
-                        )
-                    if points:
-                        hx = min(p[0] for p in points)
-                        hy = max(15, min(p[1] for p in points) - 8)
-                        cv2.putText(
-                            frame,
-                            f"{hand.get('handedness', 'hand')}: {hand.get('gesture', 'unknown')}",
-                            (hx, hy),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5,
-                            (255, 220, 80),
-                            1,
-                            cv2.LINE_AA,
-                        )
-
-                # Keep all non-locked targets visible so the operator can click them
-                # in debug mode and so multi-target state is easy to inspect.
-                for track in tracks:
-                    if not primary or track.id != primary.id:
-                        draw_track(frame, track, color=(120, 120, 120))
-
-                # draw primary track with stronger UI and update smooth_pos
-                if primary:
-                    # draw tracked overlay near original bbox
-                    # color green if centered (real mode) else cyan
-                    try:
-                        pcx = (primary.bbox[0] + primary.bbox[2]) / 2.0
-                        pcy = (primary.bbox[1] + primary.bbox[3]) / 2.0
-                        distc = (
-                                        (pcx - frame_cx) ** 2 + (pcy - frame_cy) ** 2
-                                ) ** 0.5
-                        track_color = (
-                            (0, 200, 0)
-                            if (
-                                    not serial.simulation
-                                    and distc <= center_thresh_px
-                            )
-                            else (0, 180, 80)
-                        )
-                    except Exception:
-                        track_color = (0, 180, 80)
-                    draw_track(frame, primary, color=track_color)
-                    # draw extrapolated future point and line
-                    try:
-                        lead = getattr(cfg.tracking, "extrapolate_secs", 0.2)
-                        cx = (primary.bbox[0] + primary.bbox[2]) / 2.0
-                        cy = (primary.bbox[1] + primary.bbox[3]) / 2.0
-                        px = cx + primary.velocity[0] * lead
-                        py = cy + primary.velocity[1] * lead
-                        # clamp
-                        px = max(0, min(w - 1, px))
-                        py = max(0, min(h - 1, py))
-                        cv2.line(
-                            frame,
-                            (int(cx), int(cy)),
-                            (int(px), int(py)),
-                            (0, 200, 255),
-                            2,
-                            lineType=cv2.LINE_AA,
-                        )
-                        cv2.circle(
-                            frame,
-                            (int(px), int(py)),
-                            5,
-                            (0, 200, 255),
-                            -1,
-                            lineType=cv2.LINE_AA,
-                        )
-                    except Exception:
-                        pass
-                    # map class id to name if possible
-                    try:
-                        from src.coco import COCO_CLASSES
-
-                        if 0 <= primary.class_id < len(COCO_CLASSES):
-                            name = COCO_CLASSES[primary.class_id]
-                            class_name: str = (
-                                name if isinstance(name, str) else str(primary.class_id)
-                            )
-                        else:
-                            class_name = str(primary.class_id)
-                    except (IndexError, TypeError):
-                        class_name = str(primary.class_id)
-
-                    tracked_info = {
-                        "class_name": class_name,
-                        "confidence": primary.confidence,
-                        "bbox": list(primary.bbox),
-                    }
-                    # center smoothing
-                    cx = (primary.bbox[0] + primary.bbox[2]) / 2.0
-                    cy = (primary.bbox[1] + primary.bbox[3]) / 2.0
-                    w, h = frame.shape[1], frame.shape[0]
-                    nc = (cx / w, cy / h)
-                    if smooth_pos is None:
-                        smooth_pos = list(nc)
-                    else:
-                        smooth_pos[0] = smooth_pos[0] * 0.8 + nc[0] * 0.2
-                        smooth_pos[1] = smooth_pos[1] * 0.8 + nc[1] * 0.2
-                else:
-                    tracked_info = None
-
-                # draw center UI: debug mode should move crosshair via serial simulation; real mode stays fixed
-                sc = None
-                if cfg.debug.enabled:
-                    if serial.simulation:
-                        sc = serial_center.get("nc")
-                        # if no serial updates available, synthesize a smooth moving dot
-                        if sc is None:
-                            t = time.time()
-                            sx = 0.5 + 0.35 * (__import__("math").sin(t * 0.8))
-                            sy = 0.5 + 0.25 * (__import__("math").cos(t * 0.6))
-                            sc = (sx, sy)
-                    else:
-                        sc = None
-                draw_center_ui(frame, sc)
-
-                # top-right panel for primary tracked (prominent placement); show what we're looking for
-                draw_top_left_panel(
-                    frame, tracked_info, looking_for=track_only
-                )
-                if getattr(cfg.visualization, "show_tracking_queue", True):
-                    draw_tracking_queue(
-                        frame,
-                        target_queue.target_ids(),
-                        target_queue.current_id,
-                    )
-
-                now = time.time()
-                fps = 1.0 / (now - last_time) if now != last_time else 0.0
-                last_time = now
-                device_name = getattr(detector, "device", None)
-                if not device_name:
-                    try:
-                        first_detector = next(
-                            iter(detector.detectors.values())
-                        )
-                        device_name = (
-                                getattr(first_detector.get("obj"), "device", None)
-                                or "cpu"
-                        )
-                    except Exception:
-                        device_name = "cpu"
-                try:
-                    show_info(
-                        frame,
-                        fps,
-                        infer_time_ms,
-                        device=device_name,
-                        detections=len(dets),
-                        tracks=len(tracks),
-                        font_scale_override=0.42,
-                    )
-                    cv2.imshow("realtime-cv", frame)
-                    latest_click_tracks = [
-                        (track.id, track.bbox)
-                        for track in tracks
-                        if track.lost == 0
-                        if not target_queue.is_hit(track.id)
-                    ]
-                except Exception:
-                    display_logger = __import__("logging").getLogger(
-                        "realtime_cv.display"
-                    )
-                    display_logger.exception("Failed to render frame")
-                # publish simplified telemetry for primary only
-                if primary:
-                    try:
-                        from src.coco import COCO_CLASSES
-
-                        if 0 <= primary.class_id < len(COCO_CLASSES):
-                            name = COCO_CLASSES[primary.class_id]
-                            class_name = (
-                                name if isinstance(name, str) else str(primary.class_id)
-                            )
-                        else:
-                            class_name = str(primary.class_id)
-
-                        # noinspection DuplicatedCode
-                        h, w = frame.shape[:2]
-                        cx = (primary.bbox[0] + primary.bbox[2]) / 2.0
-                        cy = (primary.bbox[1] + primary.bbox[3]) / 2.0
-                        nc = [cx / w, cy / h]
-
-                        lead = getattr(cfg.tracking, "extrapolate_secs", 0.2)
-                        px = cx + primary.velocity[0] * lead
-                        py = cy + primary.velocity[1] * lead
-                        pnc = [px / w, py / h]
-
-                        serial.send_telemetry(
-                            primary.id,
-                            class_name,
-                            primary.confidence,
-                            nc,
-                            [primary.velocity[0], primary.velocity[1]],
-                            timestamp,
-                            predicted_center=pnc,
-                            require_ack=False,
-                            advanced=cfg.serial.advanced_datapackets,
-                        )
-                    except Exception:
-                        serial_logger = __import__("logging").getLogger(
-                            "realtime_cv.serial"
-                        )
-                        serial_logger.exception("Failed to send telemetry")
-                try:
-                    key = cv2.waitKey(1) & 0xFF
-                    if key == ord("q"):
-                        raise KeyboardInterrupt
-                except Exception:
-                    # sometimes waitKey can fail in some OpenCV builds; keep looping
-                    pass
-    except KeyboardInterrupt:
-        logger.info("Shutting down")
-    finally:
-        cam_mgr.stop_all()
-        serial.stop()
-        cv2.destroyAllWindows()
+    app = RealtimeCVApplication(cfg)
+    app.run()
 
 
 if __name__ == "__main__":
