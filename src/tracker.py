@@ -269,7 +269,7 @@ class Tracker:
             my,
             0.7 * vx + 0.3 * new_vx,
             0.7 * vy + 0.3 * new_vy,
-            ]
+        ]
 
     def update(
             self,

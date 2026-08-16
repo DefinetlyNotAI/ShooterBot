@@ -674,8 +674,8 @@ class RealtimeCVApplication:
                 color = (200, 200, 200)
 
                 if (
-                    primary is not None
-                    and self._is_detection_match(detection, primary, threshold_px=50)
+                        primary is not None
+                        and self._is_detection_match(detection, primary, threshold_px=50)
                 ):
                     color = (20, 150, 255)
 

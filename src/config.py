@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 import yaml
