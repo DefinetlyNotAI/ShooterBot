@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "nirt-autoshooter"
+version = "0.1.0"
+description = "Modular real-time CV framework for robotics and automation"
+authors = ["Shahm Najeeb (shahm_najeeb@outlook.com)"]
+
+[tool.poetry.dependencies]
+python = ">=3.11"
+ultralytics = "^8.1"
+opencv-python = "^4.7"
+PyYAML = "^6.0"
+numpy = "^1.26"
+psutil = "^5.9"
+pyserial = "^3.5"
+
+[tool.black]
+line-length = 79
+target-version = ["py311"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
