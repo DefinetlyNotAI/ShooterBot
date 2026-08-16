@@ -133,10 +133,11 @@ def setup_logging(
     except Exception:
         pass
     configured_level = getattr(logging, level.upper(), logging.INFO)
-    lvl = logging.DEBUG if verbose else configured_level
+    file_level = logging.DEBUG if verbose else configured_level
     # Native-library stderr is bridged into logging, so application logs must
     # use stdout to avoid feeding the bridge back into itself.
     stream = logging.StreamHandler(sys.stdout)
+    stream.setLevel(configured_level)
     # Avoid escape sequences in redirected output and CI logs.
     use_color = bool(
         color
@@ -144,7 +145,9 @@ def setup_logging(
         and stream.stream.isatty()
         and not os.environ.get("NO_COLOR")
     )
-    stream.setFormatter(_PrettyFormatter(color=use_color, verbose=verbose))
+    # Console output stays compact and respects ``logging.level``. Verbose
+    # diagnostics are intentionally file-only so they cannot disrupt runtime UI.
+    stream.setFormatter(_PrettyFormatter(color=use_color, verbose=False))
     handlers = [stream]
     log_path = (
         Path(logfile)
@@ -153,14 +156,22 @@ def setup_logging(
     )
     log_path.parent.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(log_path, encoding="utf-8")
+    file_handler.setLevel(file_level)
     file_handler.setFormatter(
         logging.Formatter(
-            "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | %(message)s",
+            (
+                "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | "
+                "%(filename)s:%(lineno)d | %(message)s"
+                if verbose
+                else "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s | %(message)s"
+            ),
             datefmt="%Y-%m-%d %H:%M:%S",
         )
     )
     handlers.append(file_handler)
-    logging.basicConfig(level=lvl, handlers=handlers, force=True)
+    # Keep the root permissive so a verbose file handler can receive DEBUG
+    # records while the console handler continues to enforce its own threshold.
+    logging.basicConfig(level=logging.DEBUG, handlers=handlers, force=True)
     try:
         from .noise_control import start_native_stderr_bridge
 

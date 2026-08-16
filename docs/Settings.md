@@ -75,6 +75,11 @@ This project loads YAML into typed dataclasses in `src/config.py`. Unknown keys 
 
 ## Logging
 
+- `logging.level` controls the console threshold and, by default, the log-file
+  threshold.
+- `logging.verbose: true` keeps the console at `logging.level`, but records
+  DEBUG entries and source locations in the log file.
+
 - `logging.level` - log level such as `INFO` or `DEBUG`.
 - `logging.file` - runtime log file path; defaults to `logs/nirt_shooterbot.log` and is always kept under the project log folder unless an explicit path is supplied.
 - `logging.color` - enables colored console levels when output goes to a terminal; file logs remain plain text.
