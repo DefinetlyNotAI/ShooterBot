@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import re
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
@@ -243,15 +242,21 @@ def resolve_config_path(path: str | Path) -> Path:
     paths, and symlink escapes from reaching a file operation.
     """
     requested = str(path).replace("\\", "/")
-    match = re.fullmatch(
-        r"(?:configs/)?([A-Za-z0-9][A-Za-z0-9_.-]*\.ya?ml)",
-        requested,
+    filename = requested.removeprefix("configs/")
+    allowed_characters = frozenset(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
     )
-    if match is None:
+    if (
+            not filename
+            or filename == requested and "/" in requested
+            or "/" in filename
+            or filename[0] in ".-"
+            or not filename.lower().endswith((".yaml", ".yml"))
+            or any(character not in allowed_characters for character in filename)
+    ):
         raise ValueError(
             "Configuration must be a YAML filename inside the project's configs/ directory."
         )
-    filename = match.group(1)
     for candidate in CONFIG_DIR.iterdir():
         if candidate.is_file() and candidate.name == filename:
             return candidate.resolve()
