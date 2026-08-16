@@ -31,6 +31,27 @@ PROJECT_PACKAGES = {
     "sentence-transformers",
     "scipy",
 }
+CUDA_PACKAGE_NAMES = {"torch", "torchvision", "torchaudio"}
+
+
+def is_accelerated_build(package_name: str, installed_version: str) -> bool:
+    """Return whether a PyTorch package is tied to a non-default wheel index."""
+    return package_name.lower() in CUDA_PACKAGE_NAMES and "+" in installed_version
+
+
+def split_updates(available: list[dict[str, object]]) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """Avoid treating PyPI's CPU wheel as an update for an accelerated build."""
+    updates: list[dict[str, object]] = []
+    accelerated: list[dict[str, object]] = []
+    for item in available:
+        package_name = str(item.get("name", ""))
+        if package_name.lower() not in PROJECT_PACKAGES:
+            continue
+        if is_accelerated_build(package_name, str(item.get("version", ""))):
+            accelerated.append(item)
+        else:
+            updates.append(item)
+    return updates, accelerated
 
 
 def main() -> None:
@@ -50,17 +71,21 @@ def main() -> None:
         available = json.loads(result.stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError("pip returned invalid update data") from exc
-    updates = [
-        item for item in available
-        if str(item.get("name", "")).lower() in PROJECT_PACKAGES
-    ]
-    if not updates:
+    updates, accelerated = split_updates(available)
+    if not updates and not accelerated:
         print("No project package upgrades are available")
         return
-    print("Available project package upgrades:")
-    for item in sorted(updates, key=lambda value: str(value["name"]).lower()):
-        print(
-            f"  {item['name']}: {item['version']} -> {item['latest_version']}"
+    if updates:
+        print("Available project package upgrades:")
+        for item in sorted(updates, key=lambda value: str(value["name"]).lower()):
+            print(
+                f"  {item['name']}: {item['version']} -> {item['latest_version']}"
+            )
+    for item in sorted(accelerated, key=lambda value: str(value["name"]).lower()):
+        print.warning(
+            f"  {item['name']}: {item['version']} is an accelerated build; "
+            "PyPI's reported version is not a compatible upgrade target. "
+            "Use the matching PyTorch CUDA wheel index and compatibility matrix."
         )
     print("No packages were changed")
 
