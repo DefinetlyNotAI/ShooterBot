@@ -241,8 +241,6 @@ def choose_script(ui: UI) -> ScriptSpec | None:
         else:
             enabled[number] = spec
             ui.out(f"    {number}. {spec.label}", "white")
-            if spec.cuda_required and cuda_available() is None:
-                ui.out("       CUDA availability is being checked.", "dim")
         ui.out(f"       {spec.description}", "dim")
 
     def validate(value: str) -> int:
