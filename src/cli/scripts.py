@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,6 +24,10 @@ from src.utils import logger, setup_logging
 setup_logging()
 
 CONFIG = ROOT / "configs" / "default.yaml"
+_cuda_probe_lock = threading.Lock()
+_cuda_probe_result: bool | None = None
+_cuda_probe_done = threading.Event()
+_cuda_probe_started = False
 
 
 @dataclass(frozen=True)
@@ -124,17 +129,44 @@ def available_packages(packages: tuple[str, ...]) -> list[str]:
     return [name for name in packages if importlib.util.find_spec(name) is None]
 
 
-def cuda_available() -> bool:
-    """Avoid importing PyTorch unless a CUDA-only script is selected."""
+def _probe_cuda() -> None:
+    """Import PyTorch outside the TUI render path."""
+    global _cuda_probe_result
     try:
         import torch
 
-        return bool(torch.cuda.is_available())
+        _cuda_probe_result = bool(torch.cuda.is_available())
     except Exception:
-        return False
+        _cuda_probe_result = False
+    finally:
+        _cuda_probe_done.set()
 
 
-def script_issues(spec: ScriptSpec) -> list[str]:
+def cuda_available(*, wait: bool = False) -> bool | None:
+    """Return cached CUDA readiness, probing in the background if needed."""
+    global _cuda_probe_started, _cuda_probe_result
+    with _cuda_probe_lock:
+        if not _cuda_probe_started:
+            _cuda_probe_started = True
+            if importlib.util.find_spec("torch") is None:
+                _cuda_probe_result = False
+                _cuda_probe_done.set()
+            else:
+                threading.Thread(
+                    target=_probe_cuda,
+                    name="scripts-cuda-probe",
+                    daemon=True,
+                ).start()
+    if wait:
+        _cuda_probe_done.wait()
+    return _cuda_probe_result
+
+
+def script_issues(
+        spec: ScriptSpec,
+        *,
+        wait_for_cuda: bool = False,
+) -> list[str]:
     """Return actionable reasons that prevent a script from running."""
     issues: list[str] = []
     missing_packages = available_packages(spec.packages)
@@ -152,7 +184,7 @@ def script_issues(spec: ScriptSpec) -> list[str]:
     ]
     if missing_models:
         issues.append("missing models: " + ", ".join(missing_models))
-    if spec.cuda_required and not cuda_available():
+    if spec.cuda_required and cuda_available(wait=wait_for_cuda) is False:
         issues.append("CUDA is unavailable")
     return issues
 
@@ -173,6 +205,7 @@ def health_check(ui: UI) -> bool:
 
 def choose_script(ui: UI) -> ScriptSpec | None:
     """Show a numbered, capability-aware menu of scripts."""
+    cuda_available()
     ui.header("Project Scripts")
     ui.out("    1. Health Check", "white")
     ui.out(f"       Project scripts health check.", "dim")
@@ -187,6 +220,8 @@ def choose_script(ui: UI) -> ScriptSpec | None:
         else:
             enabled[number] = spec
             ui.out(f"    {number}. {spec.label}", "white")
+            if spec.cuda_required and cuda_available() is None:
+                ui.out("       CUDA availability is being checked.", "dim")
         ui.out(f"       {spec.description}", "dim")
 
     def validate(value: str) -> int:
@@ -203,7 +238,11 @@ def choose_script(ui: UI) -> ScriptSpec | None:
     )
     if choice == 1:
         return None
-    return enabled[choice]
+    selected = enabled[choice]
+    issues = script_issues(selected, wait_for_cuda=True)
+    if issues:
+        raise Stop(f"{selected.label} is unavailable: {'; '.join(issues)}")
+    return selected
 
 
 def run_script(ui: UI, spec: ScriptSpec) -> int:
