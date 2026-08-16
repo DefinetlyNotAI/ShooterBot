@@ -12,6 +12,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from src.scripts.paths import models_dir
+from src.scripts.runtime import configure_script_output
+
+print = configure_script_output(__name__)
 
 PACKAGES = ("ultralytics", "opencv-python", "PyYAML", "numpy", "pyserial")
 

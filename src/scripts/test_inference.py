@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT))
 
 from ultralytics import YOLO
 from src.scripts.paths import files_dir, model_path
+from src.scripts.runtime import configure_script_output
+
+print = configure_script_output(__name__)
 
 
 def safe_str(value: Any) -> str:

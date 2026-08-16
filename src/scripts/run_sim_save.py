@@ -16,6 +16,7 @@ from src.config import load_config
 from src.inference import DetectorManager
 from src.serial_comm import SerialInterface
 from src.scripts.paths import files_dir
+from src.scripts.runtime import configure_script_output
 from src.tracker import Tracker
 from src.visualization import (
     draw_center_ui,
@@ -24,6 +25,8 @@ from src.visualization import (
     draw_track,
     show_info,
 )
+
+print = configure_script_output(__name__)
 
 
 def safe_str(value: Any) -> str:

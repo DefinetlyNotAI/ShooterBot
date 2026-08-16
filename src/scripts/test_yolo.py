@@ -19,6 +19,9 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from src.scripts.paths import model_path
+from src.scripts.runtime import configure_script_output
+
+print = configure_script_output(__name__)
 
 MODEL_PATH = model_path("yolov8n.pt")
 
