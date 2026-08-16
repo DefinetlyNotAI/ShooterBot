@@ -67,15 +67,21 @@ def _feature_import_error(feature: str) -> str | None:
 
 def _configured_model_paths(config: Any) -> list[Path]:
     paths: list[Path] = []
+
     models = getattr(config.inference, "model", []) or []
+
     if isinstance(models, str):
         models = [models]
+
     for model in models:
-        if str(model).lower() != "auto":
-            paths.append(Path(str(model)))
+        if isinstance(model, str) and model.lower() != "auto":
+            paths.append(Path(model))
+
     face_model = getattr(config.inference, "face_model", None)
-    if face_model:
-        paths.append(Path(str(face_model)))
+
+    if isinstance(face_model, str) and face_model:
+        paths.append(Path(face_model))
+
     return paths
 
 
