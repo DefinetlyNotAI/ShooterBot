@@ -175,6 +175,7 @@ def choose_script(ui: UI) -> ScriptSpec | None:
     """Show a numbered, capability-aware menu of scripts."""
     ui.header("Project Scripts")
     ui.out("    1. Health Check", "white")
+    ui.out(f"       Project scripts health check.", "dim")
     enabled: dict[int, ScriptSpec] = {}
     for number, spec in enumerate(SCRIPTS, 2):
         issues = script_issues(spec)
@@ -189,10 +190,10 @@ def choose_script(ui: UI) -> ScriptSpec | None:
         ui.out(f"       {spec.description}", "dim")
 
     def validate(value: str) -> int:
-        choice = integer_value(value, 1, len(SCRIPTS) + 1)
-        if choice != 1 and choice not in enabled:
+        choice_to_validate = integer_value(value, 1, len(SCRIPTS) + 1)
+        if choice_to_validate != 1 and choice_to_validate not in enabled:
             raise ValueError
-        return choice
+        return choice_to_validate
 
     choice = ui.ask(
         "Choose an action",
