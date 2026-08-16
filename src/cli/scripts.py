@@ -47,6 +47,27 @@ class ScriptSpec:
 
 SCRIPTS = (
     ScriptSpec(
+        "config_check",
+        "Validate Configuration",
+        "src.scripts.check_config",
+        "Parse and report the active configuration without loading models.",
+        packages=("yaml",),
+    ),
+    ScriptSpec(
+        "source_check",
+        "Check External Data Sources",
+        "src.scripts.check_data_sources",
+        "Check approved external links, HTTPS, and redirect trust boundaries.",
+        config_required=False,
+    ),
+    ScriptSpec(
+        "package_updates",
+        "Check Package Updates",
+        "src.scripts.check_package_updates",
+        "Report available project dependency updates without installing them.",
+        config_required=False,
+    ),
+    ScriptSpec(
         "runtime_report",
         "Runtime Report",
         "src.scripts.runtime_report",
@@ -249,6 +270,7 @@ def run_script(ui: UI, spec: ScriptSpec) -> int:
     """Run one script as a module with the project root as its cwd."""
     ui.header(f"Running: {spec.label}")
     ui.out(f"  {spec.description}", "dim")
+    print()
     logger.info("Launching utility script %s", spec.module)
     try:
         result = subprocess.run(
@@ -265,6 +287,7 @@ def run_script(ui: UI, spec: ScriptSpec) -> int:
             "Review the output above and logs/realtime_cv.log for details.",
         )
     else:
+        print()
         ui.out(f"  {spec.label} completed successfully.", "green")
     return result.returncode
 

@@ -19,6 +19,9 @@ model, opening a camera, or creating output.
 
 | Console action | Module | Purpose |
 | --- | --- | --- |
+| Validate Configuration | `src.scripts.check_config` | Parses the active YAML configuration without opening models or cameras. |
+| Check External Data Sources | `src.scripts.check_data_sources` | Checks source reachability plus HTTPS and redirect trust boundaries. It cannot prove model integrity without publisher SHA-256 pins. |
+| Check Package Updates | `src.scripts.check_package_updates` | Reports available project dependency updates without installing anything. |
 | Runtime Report | `src.scripts.runtime_report` | Reports Python, package, config, and model readiness without loading models. |
 | Inspect Detectors | `src.scripts.check_detectors` | Loads configured detectors and prints metadata. |
 | Print Loaded Models | `src.scripts.print_models` | Lists configured models after loading them. |
