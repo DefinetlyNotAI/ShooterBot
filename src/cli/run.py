@@ -15,6 +15,7 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from src.utils import setup_logging, logger
+from src.ui import print_banner
 
 # Install the project's formatter before importing libraries that may emit
 # diagnostics during import (OpenCV, NumPy, TensorFlow, or MediaPipe). The
@@ -1308,6 +1309,9 @@ class NIRTShooterBotApplication:
 
         except KeyboardInterrupt:
             logger.info("Shutting down")
+            print()
+            print_banner("ShooterBot - By Shahm Najeeb")
+            print()
 
         finally:
             self.shutdown()
@@ -1399,7 +1403,8 @@ def load_application_config(config_argument: str):
 
 
 def main() -> None:
-    # TODO: Separate the UI element from installer to src/ui.py, then use a banner here with title "ShooterBot - NIRT"
+    print()
+    print_banner("ShooterBot - NIRT")
     logger.info("Starting ShooterBot setup phase")
 
     args = parse_args()

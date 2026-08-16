@@ -121,7 +121,7 @@ def main():
 
     load_time = time.perf_counter() - load_start
 
-    print(f"\nModel loading time: {load_time:.2f}s")
+    print(f"Model loading time: {load_time:.2f}s")
 
     print("Device:", dm.device)
 
@@ -194,7 +194,7 @@ def main():
 
         if torch.cuda.is_available():
 
-            print("\nWarming up CUDA...")
+            print("Warming up CUDA...")
 
             for i in range(1, 11):
 
@@ -214,19 +214,19 @@ def main():
             print()
 
         else:
-            print("\nCUDA unavailable")
+            print("CUDA unavailable")
 
     except Exception as e:
-        print(f"\nWarmup skipped: {e}")
+        print(f"Warmup skipped: {e}")
 
-    print("\nWarmup complete")
+    print("Warmup complete")
 
     # -------------------------
     # Benchmark
     # -------------------------
 
-    print("\nStarting benchmark...")
-    print("Press Ctrl+C to stop\n")
+    print("Starting benchmark...")
+    print("Press Ctrl+C to stop")
 
     frame_count: int = 0
 
@@ -251,7 +251,7 @@ def main():
 
             print_progress(frame_count, args.frames, ms)
     except KeyboardInterrupt:
-        print("\n\nBenchmark interrupted")
+        print("Benchmark interrupted")
     finally:
         if cap is not None:
             cap.release()
@@ -262,7 +262,7 @@ def main():
         print("No samples collected")
         return
 
-    print(f"\nFrames: {len(times)}")
+    print(f"Frames: {len(times)}")
 
     print(f"Avg inference ms: {statistics.mean(times):.2f}")
 
