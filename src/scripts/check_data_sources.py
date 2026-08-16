@@ -14,6 +14,7 @@ if str(ROOT) not in sys.path:
 
 from src.data_sources import (
     MODEL_DOWNLOAD_URLS,
+    MODEL_SHA256,
     OPENCV_FACE_MODEL_URL,
     OPENCV_FACE_PROTO_URL,
     PYTORCH_CUDA_WHEEL_INDEX,
@@ -70,10 +71,17 @@ def main() -> None:
     )
     results = [check_source(label, url) for label, url in sources]
     print(f"Online approved sources: {sum(results)}/{len(results)}")
-    print.warning(
-        "Cryptographic integrity is not verified because no publisher-signed "
-        "SHA-256 manifest is configured."
-    )
+    unpinned = sorted(set(MODEL_DOWNLOAD_URLS) - set(MODEL_SHA256))
+    if unpinned:
+        print.warning(
+            "Model downloads without a configured SHA-256 pin: "
+            + ", ".join(unpinned)
+        )
+    else:
+        print.info(
+            f"SHA-256 pins are configured for all {len(MODEL_DOWNLOAD_URLS)} "
+            "model downloads; the installer verifies each pin before install."
+        )
     if not all(results):
         raise SystemExit(2)
 
