@@ -7,6 +7,7 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import cv2
 
@@ -17,32 +18,39 @@ from src.config import load_config
 from src.inference import DetectorManager
 
 
-def positive_int(value):
-    value = int(value)
-    if value <= 0:
+def positive_int(value: str) -> int:
+    result = int(value)
+
+    if result <= 0:
         raise argparse.ArgumentTypeError("frames must be > 0")
-    return value
+
+    return result
 
 
-def print_progress(current: int, total: int, ms: float, width: int = 30):
+def print_progress(
+        current: int,
+        total: int,
+        ms: float,
+        width: int = 30,
+) -> None:
     if total <= 0:
         return
 
-    progress = current / total
-    filled = int(width * progress)
+    progress: float = current / total
+    filled: int = int(width * progress)
 
     bar = "█" * filled + "░" * (width - filled)
-    fps = 1000 / ms if ms > 0 else 0
+    fps: float = 1000.0 / ms if ms > 0 else 0.0
 
     print(
-        f"\r[{bar}] {progress * 100:6.2f}% "
+        f"\r[{bar}] {progress * 100.0:6.2f}% "
         f"{current}/{total} | {ms:.1f}ms | {fps:.1f} FPS",
         end="",
         flush=True,
     )
 
 
-def benchmark_frame(dm, frame):
+def benchmark_frame(dm: DetectorManager, frame: Any) -> float:
     """
     Run one inference pass with CUDA synchronization.
     Ensures GPU timing is accurate.
@@ -70,7 +78,7 @@ def benchmark_frame(dm, frame):
 
         end = time.perf_counter()
 
-    return (end - start) * 1000.0
+    return float((end - start) * 1000.0)
 
 
 def main():
@@ -113,11 +121,36 @@ def main():
     for name, meta in dm.detectors.items():
         obj = meta.get("obj")
 
+        name_str = name if isinstance(name, str) else "unknown"
+
+        raw_type = meta.get("type")
+        detector_type = (
+            raw_type if isinstance(raw_type, str) else "unknown"
+        )
+
+        raw_priority = meta.get("priority")
+        priority_str = (
+            str(raw_priority)
+            if isinstance(raw_priority, (int, float, str))
+            else "unknown"
+        )
+
+        raw_model_name = (
+            getattr(obj, "model_name", None)
+            if obj is not None
+            else None
+        )
+        model_name = (
+            raw_model_name
+            if isinstance(raw_model_name, str)
+            else "unknown"
+        )
+
         print(
-            f"  {name}: "
-            f"type={meta.get('type')} "
-            f"priority={meta.get('priority')} "
-            f"model={getattr(obj, 'model_name', 'unknown')}"
+            f"  {name_str}: "
+            f"type={detector_type} "
+            f"priority={priority_str} "
+            f"model={model_name}"
         )
 
     cap = cv2.VideoCapture(cfg.camera.sources[0])
@@ -125,7 +158,7 @@ def main():
     if not cap.isOpened():
         raise RuntimeError("Failed to open camera")
 
-    times = []
+    times: list[float] = []
 
     # -------------------------
     # CUDA warmup
@@ -166,7 +199,7 @@ def main():
     print("\nStarting benchmark...")
     print("Press Ctrl+C to stop\n")
 
-    frame_count = 0
+    frame_count: int = 0
 
     try:
 
