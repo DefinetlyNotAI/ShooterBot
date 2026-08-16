@@ -190,6 +190,21 @@ void sendTargetTelemetry() {
 }
 
 void parsePacket(const String& payload) {
+    const String handshakeType = F("\"type\":\"nirt_handshake\"");
+    if (payload.indexOf(handshakeType) >= 0) {
+    const String nonceKey = F("\"nonce\":\"");
+    const int nonceStart = payload.indexOf(nonceKey);
+    if (nonceStart >= 0) {
+    const int valueStart = nonceStart + nonceKey.length();
+    const int valueEnd = payload.indexOf('"', valueStart);
+    if (valueEnd > valueStart) {
+    Serial.print(F("{\"type\":\"nirt_ready\",\"nonce\":\""));
+    Serial.print(payload.substring(valueStart, valueEnd));
+    Serial.println(F("\"}"));
+}
+}
+    return;
+}
     float x = readFloatField(payload, "x", targetX);
     float y = readFloatField(payload, "y", targetY);
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 import binascii
 import json
 import logging
+import secrets
 import threading
 import time
 from typing import Any, Callable
@@ -24,12 +25,14 @@ class SerialInterface:
             crc: bool = True,
             simulation: bool = True,
             ack_timeout: float = 1.0,
+            handshake_timeout: float = 2.0,
     ) -> None:
         self.port = port
         self.baudrate = baudrate
         self.crc = crc
         self.simulation = simulation
         self.ack_timeout = ack_timeout
+        self.handshake_timeout = handshake_timeout
 
         self._running = False
         self._lock = threading.Lock()
@@ -39,6 +42,26 @@ class SerialInterface:
         self._on_receive: Callable[[bytes], None] = lambda _data: None
 
         self._last_sent: dict[int, float] = {}
+        self._verified = simulation
+
+    def _verify_handshake(self, connection: Any) -> bool:
+        """Require the controller to prove it understands this protocol."""
+        nonce = secrets.token_hex(16)
+        hello = json.dumps({"type": "nirt_handshake", "nonce": nonce}).encode("utf-8")
+        connection.reset_input_buffer()
+        connection.write(hello)
+        deadline = time.monotonic() + self.handshake_timeout
+        while time.monotonic() < deadline:
+            if connection.in_waiting:
+                response = connection.read(connection.in_waiting)
+                try:
+                    message = json.loads(response.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if message == {"type": "nirt_ready", "nonce": nonce}:
+                    return True
+            time.sleep(0.01)
+        return False
 
     def _connect_loop(self) -> None:
         try:
@@ -77,6 +100,11 @@ class SerialInterface:
                             self.baudrate,
                             timeout=0.1,
                         )
+                        if not self._verify_handshake(self._conn):
+                            self._conn.close()
+                            self._conn = None
+                            raise RuntimeError("controller handshake timed out or was invalid")
+                        self._verified = True
                         retry_count = 0
 
                     except Exception as exc:
@@ -123,6 +151,7 @@ class SerialInterface:
                         pass
 
                 self._conn = None
+                self._verified = self.simulation
 
                 time.sleep(1.0)
 
@@ -158,6 +187,7 @@ class SerialInterface:
                 pass
 
         self._conn = None
+        self._verified = self.simulation
         self._thread = None
 
     def set_receive_callback(
@@ -197,6 +227,10 @@ class SerialInterface:
                 packet.hex(),
             )
             return True
+
+        if not self._verified:
+            logger.warning("Cannot send packet: controller handshake is incomplete")
+            return False
 
         with self._lock:
             connection = self._conn
