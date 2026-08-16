@@ -39,7 +39,8 @@ class _PrettyFormatter(logging.Formatter):
         self.project_root = Path(__file__).resolve().parents[1]
         super().__init__()
 
-    def _source_name(self, record: logging.LogRecord) -> str:
+    @staticmethod
+    def _source_name(record: logging.LogRecord) -> str:
         name = record.name.removeprefix("realtime_cv.")
         return "app" if name == "realtime_cv" else name
 

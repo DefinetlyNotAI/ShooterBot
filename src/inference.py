@@ -23,7 +23,6 @@ logger = logging.getLogger("realtime_cv.inference")
 def choose_device(device: str) -> str:
     if device == "auto":
         try:
-            # noinspection PyPackageRequirements
             import torch
 
             if not torch.cuda.is_available():

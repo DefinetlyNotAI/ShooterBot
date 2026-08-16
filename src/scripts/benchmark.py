@@ -132,7 +132,6 @@ def main():
     # -------------------------
 
     try:
-        # noinspection PyPackageRequirements
         import torch
 
         if torch.cuda.is_available():

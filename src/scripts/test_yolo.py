@@ -5,7 +5,6 @@ from pathlib import Path
 import cv2
 
 try:
-    # noinspection PyPackageRequirements
     import torch
 except Exception:
     exit("Requires CUDA support for this test - Needs torch installed")

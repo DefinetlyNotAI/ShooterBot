@@ -216,7 +216,11 @@ def draw_top_left_panel(
         )
         # draw thumbnail area inside panel
         bbox = tracked.get("bbox")
-        if bbox:
+
+        if (
+                isinstance(bbox, (list, tuple))
+                and len(bbox) == 4
+        ):
             bx1, by1, bx2, by2 = map(int, bbox)
             try:
                 bx1 = max(0, bx1)
@@ -383,7 +387,6 @@ def show_info(
     )
     # GPU memory and utilization (try torch and pynvml)
     try:
-        # noinspection PyPackageRequirements
         import torch
 
         if device.startswith("cuda") and torch.cuda.is_available():
@@ -402,7 +405,6 @@ def show_info(
         pass
     try:
         # try pynvml for GPU utilization
-        # noinspection PyPackageRequirements
         import pynvml
 
         pynvml.nvmlInit()

@@ -96,7 +96,6 @@ draw_top_left_panel(
 )
 
 try:
-    # noinspection PyPackageRequirements
     import torch
 
     if torch.cuda.is_available():
