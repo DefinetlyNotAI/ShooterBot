@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
 from typing import Any
 
 from src.noise_control import configure_library_noise
@@ -37,5 +39,9 @@ def configure_script_output(module_name: str) -> ScriptOutput:
     """Install standard logging before a script emits diagnostic output."""
     configure_library_noise()
     setup_logging()
-    logger_name = module_name.removeprefix("src.")
+    if module_name == "__main__":
+        source_file = getattr(sys.modules.get("__main__"), "__file__", None)
+        logger_name = Path(source_file).stem if source_file else "script"
+    else:
+        logger_name = module_name.removeprefix("src.")
     return ScriptOutput(logging.getLogger(f"realtime_cv.{logger_name}"))
