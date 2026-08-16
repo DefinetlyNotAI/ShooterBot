@@ -16,12 +16,23 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+import urllib.parse
 from io import TextIOWrapper
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast, BinaryIO
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from src.data_sources import (
+    MAX_EXTERNAL_DOWNLOAD_BYTES,
+    MODEL_DOWNLOAD_URLS,
+    PYTORCH_CUDA_WHEEL_INDEX,
+    TRUSTED_DOWNLOAD_HOSTS,
+)
+
 CONFIG = ROOT / "configs" / "default.yaml"
 CREATED_MODELS: list[Path] = []
 CONFIG_BACKUP: bytes | None = None
@@ -87,37 +98,37 @@ MANAGED_DISTRIBUTIONS = [
 MODELS = {
     "yolov8n.pt": (
         "Lightweight general detector; recommended for CPU",
-        "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+        MODEL_DOWNLOAD_URLS["yolov8n.pt"],
         True,
     ),
     "yolov8m.pt": (
         "Higher-quality general detector; GPU recommended",
-        "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8m.pt",
+        MODEL_DOWNLOAD_URLS["yolov8m.pt"],
         False,
     ),
     "yolo26n-face.pt": (
         "Face detector used by the default configuration",
-        "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolo26n-face.pt",
+        MODEL_DOWNLOAD_URLS["yolo26n-face.pt"],
         True,
     ),
     "yolo26n.pt": (
         "Optional lightweight general detector already supported by the project",
-        "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt",
+        MODEL_DOWNLOAD_URLS["yolo26n.pt"],
         False,
     ),
     "yolov11m-face.pt": (
         "Higher-quality face detector",
-        "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov11m-face.pt",
+        MODEL_DOWNLOAD_URLS["yolov11m-face.pt"],
         False,
     ),
     "yolov11l-face.pt": (
         "Large high-quality face detector; GPU recommended",
-        "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov11l-face.pt",
+        MODEL_DOWNLOAD_URLS["yolov11l-face.pt"],
         False,
     ),
     "yolov10n-face.pt": (
         "Older lightweight face detector",
-        "https://github.com/akanametov/yolo-face/releases/download/1.0.0/yolov10n-face.pt",
+        MODEL_DOWNLOAD_URLS["yolov10n-face.pt"],
         False,
     ),
 }
@@ -1086,7 +1097,7 @@ def install_gpu(ui, skip=False):
         "CUDA PyTorch",
         download_options=[
             "--index-url",
-            "https://download.pytorch.org/whl/cu124",
+            PYTORCH_CUDA_WHEEL_INDEX,
         ],
         install_options=[
             "--upgrade",
@@ -1349,7 +1360,7 @@ def repair_health(ui, issues):
                     "CUDA PyTorch repair",
                     download_options=[
                         "--index-url",
-                        "https://download.pytorch.org/whl/cu124",
+                        PYTORCH_CUDA_WHEEL_INDEX,
                     ],
                     install_options=[
                         "--upgrade",
@@ -1407,38 +1418,64 @@ def download_to_temp(
         label: str,
 ) -> tuple[Path, int, int]:
     """Download a URL to a temporary file and report progress."""
+    def trusted_url(candidate: str) -> bool:
+        parsed = urllib.parse.urlsplit(candidate)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname is not None
+            and parsed.hostname.lower() in TRUSTED_DOWNLOAD_HOSTS
+        )
+
+    if not trusted_url(url):
+        raise Stop("Download source is not an approved HTTPS host.")
     request = urllib.request.Request(
         url,
         headers={"User-Agent": "NIRT-ShooterRobot-installer"},
     )
 
-    with urllib.request.urlopen(request, timeout=60) as response:
-        total = int(response.headers.get("Content-Length", "0") or 0)
+    temp_path = None
+    try:
+        with urllib.request.urlopen(request, timeout=60) as response:
+            if not trusted_url(response.geturl()):
+                raise Stop("Download redirect resolved to an unapproved host.")
+            try:
+                total = int(response.headers.get("Content-Length", "0") or 0)
+            except ValueError:
+                total = 0
+            if total > MAX_EXTERNAL_DOWNLOAD_BYTES:
+                raise Stop("Download exceeds the installer safety size limit.")
 
-        with tempfile.NamedTemporaryFile(
-                prefix=f".{name}.",
-                suffix=".part",
-                dir=directory,
-                delete=False,
-        ) as temp:
-            temp_path = Path(temp.name)
-            received = 0
+            with tempfile.NamedTemporaryFile(
+                    prefix=f".{name}.",
+                    suffix=".part",
+                    dir=directory,
+                    delete=False,
+            ) as temp:
+                temp_path = Path(temp.name)
+                received = 0
 
-            while True:
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    break
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
 
-                temp.write(chunk)
-                received += len(chunk)
+                    temp.write(chunk)
+                    received += len(chunk)
+                    if received > MAX_EXTERNAL_DOWNLOAD_BYTES:
+                        raise Stop(
+                            "Download exceeds the installer safety size limit."
+                        )
 
-                ui.progress_bytes(
-                    label,
-                    received,
-                    total or None,
-                )
-
-    return temp_path, received, total
+                    ui.progress_bytes(
+                        label,
+                        received,
+                        total or None,
+                    )
+        return temp_path, received, total
+    except Exception:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
+        raise
 
 
 def download_model_asset(ui, name, url, destination):

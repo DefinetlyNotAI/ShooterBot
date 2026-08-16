@@ -9,12 +9,21 @@ FaceDetector.predict returns list of dicts with keys: bbox, confidence, class_id
 from __future__ import annotations
 
 import logging
+import os
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import cv2
 import numpy as np
+
+from .data_sources import (
+    MAX_EXTERNAL_DOWNLOAD_BYTES,
+    OPENCV_FACE_MODEL_URL,
+    OPENCV_FACE_PROTO_URL,
+    TRUSTED_DOWNLOAD_HOSTS,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL_DIR = ROOT / "models"
@@ -22,19 +31,44 @@ CACHE_DIR = ROOT / ".cache" / "realtime_cv_models"
 
 logger = logging.getLogger("realtime_cv.face")
 
-PROTO_URL = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
-MODEL_URL = (
-    "https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20170830"
-    "/res10_300x300_ssd_iter_140000.caffemodel"
-)
+PROTO_URL = OPENCV_FACE_PROTO_URL
+MODEL_URL = OPENCV_FACE_MODEL_URL
 
 
 def _download(url: str, dst: Path) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+            parsed.scheme != "https"
+            or parsed.hostname is None
+            or parsed.hostname.lower() not in TRUSTED_DOWNLOAD_HOSTS
+    ):
+        raise ValueError("Face model source is not an approved HTTPS host")
     if dst.exists():
         return
     logger.info(f"Downloading {url} -> {dst}")
     dst.parent.mkdir(parents=True, exist_ok=True)
-    urllib.request.urlretrieve(url, str(dst))
+    temporary = dst.with_suffix(dst.suffix + ".part")
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "NIRT-ShooterRobot"})
+        with urllib.request.urlopen(request, timeout=60) as response:
+            final = urllib.parse.urlsplit(response.geturl())
+            if (
+                    final.scheme != "https"
+                    or final.hostname is None
+                    or final.hostname.lower() not in TRUSTED_DOWNLOAD_HOSTS
+            ):
+                raise ValueError("Face model redirect resolved to an unapproved host")
+            with temporary.open("wb") as stream:
+                received = 0
+                while chunk := response.read(1024 * 1024):
+                    received += len(chunk)
+                    if received > MAX_EXTERNAL_DOWNLOAD_BYTES:
+                        raise ValueError("Face model download exceeds the safety size limit")
+                    stream.write(chunk)
+        os.replace(temporary, dst)
+    except Exception:
+        temporary.unlink(missing_ok=True)
+        raise
 
 
 class FaceDetector:
