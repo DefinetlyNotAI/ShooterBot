@@ -10,4 +10,5 @@ This folder explains the project structure, Arduino protocol, runtime behavior, 
 - [`Settings.md`](./Settings.md) - configuration reference and caveats
 - [`Detection ID.md`](./Detection%20ID.md) - full COCO detection ID table
 - [`Installer.md`](./Installer.md) - how to install and configure the project
+- [`Scripts.md`](./Scripts.md) - capability-aware launcher and diagnostics reference
 - [`../arduino/README.md`](../arduino/README.md) - Arduino example sketch notes

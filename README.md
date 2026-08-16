@@ -43,6 +43,7 @@ Production-ready, modular real-time computer vision framework for robotics and a
 - Modular architecture: camera, inference, tracking, visualization, config, logging, serial
 
 See [docs/installer.md](docs/Installer.md) for setup, dependency, model, and troubleshooting details.
+Use [docs/Scripts.md](docs/Scripts.md) for the diagnostic Scripts Console and utility-script reference.
 
 ### License
 

@@ -41,3 +41,8 @@ The target queue cycles shot targets by default. Set `tracking.cycle_remember: f
 ## Diagnostics
 
 Use the logging settings in `configs/default.yaml` to control level, color, verbose source context, and the runtime log file. Runtime logs are stored under `logs/` by default. The runtime setup check reports missing required packages, configured model files, and enabled optional features that cannot load.
+
+For standalone checks, run `python -m src.cli.scripts`. Its capability-aware
+menu disables scripts that cannot run with the current packages, configuration,
+models, or CUDA support. Script-generated images are stored under `files/` in
+the project root; models must stay under the root `models/` directory.

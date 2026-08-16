@@ -13,13 +13,19 @@ This project is a modular real-time computer vision pipeline. The main runtime e
 
 ## Main Modules
 
-- `src/cli/run.py` starts the application, applies CLI overrides, opens the window, and drives the main loop.
+- `src/cli/run.py` installs bootstrap logging before heavy imports, then starts the application, applies CLI overrides, opens the window, and drives the main loop.
+- `src/cli/scripts.py` provides the interactive, capability-aware launcher for `src/scripts/` diagnostics.
 - `src/config.py` loads YAML config into dataclasses and normalizes model paths under `models/`.
 - `src/camera.py` handles real cameras, video files, and synthetic simulation frames.
 - `src/inference.py` wraps Ultralytics YOLO, optional face detection, and detection filtering.
 - `src/tracker.py` keeps persistent track IDs and a simple velocity estimate.
 - `src/serial_comm.py` handles serial output, optional CRC, and simulation mode.
 - `src/visualization.py` draws the UI overlay and diagnostic panels.
+
+Runtime logging starts with the project formatter before OpenCV or optional ML
+libraries load. Once YAML configuration is available, the logger is replaced
+with the configured level, output file, colors, and verbose context. Native
+stderr diagnostics are forwarded through `realtime_cv.library`.
 
 ## Detection Pipeline
 
